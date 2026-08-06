@@ -1,0 +1,56 @@
+# DoDoClaw default settings (overridden by env / .env)
+
+gsi:
+  host: "127.0.0.1"
+  port: 3000
+  auth_token: "dodoclaw_secret"
+
+coach:
+  language: "zh-CN"
+  # LLM provider id — see dodoclaw.providers.PROVIDERS
+  # CN: stepfun_plan | stepfun | deepseek | dashscope | zhipu | moonshot | siliconflow | volcengine | …
+  provider: "stepfun_plan"
+  # Optional overrides (empty = use provider defaults / .env)
+  # base_url: "https://api.stepfun.com/step_plan/v1"
+  # model: "step-3.7-flash"
+  max_reply_chars: 280
+  system_style: |
+    你是 DoDoClaw，一名简洁、实战向的 Dota 2 语音教练。
+    结合当前 GSI 局势作答；信息不足时明确说明假设。
+    优先给出可执行建议（出装思路、站位、目标、时机），避免长篇理论。
+    用口语化中文，适合语音播报，单次回答尽量短。
+
+# BP / Meta — OpenDota (no token) and/or STRATZ (user token)
+meta:
+  enabled: true
+  # auto: STRATZ if STRATZ_API_TOKEN set, else OpenDota
+  source: "auto"          # auto | opendota | stratz
+  cache_ttl_sec: 21600    # 6h local cache under data/meta/
+  fallback_opendota: true # STRATZ 失败时回退 OpenDota
+  opendota_bracket: 0     # 0=all ranks 1-8, or 1..8 single bracket
+  stratz_bracket: "high"  # all|low|mid|high|divine_immortal|legend_ancient|...
+  # Tokens live in .env: OPENDOTA_API_KEY, STRATZ_API_TOKEN
+
+reminders:
+  enabled: true
+  # Game clock reminders (minutes:seconds style handled in code)
+  rune_spawn_interval_sec: 120   # power runes every 2 min (post 7.x baseline)
+  bounty_rune_interval_sec: 180  # bounty / water typically 3 min early
+  announce_buyback_ready: true
+  announce_ult_ready: false
+  # Cooldown (real seconds) between repeating the same reminder key
+  cooldown_sec: 25
+
+voice:
+  # ASR: mock | whisper | stepfun_plan | stepfun
+  stt_backend: "mock"
+  # stt_model: "stepaudio-2.5-asr"
+  # TTS: mock | edge | stepfun_plan | stepfun
+  tts_backend: "mock"
+  # tts_model: "stepaudio-2.5-tts"
+  # tts_voice: "cixingnansheng"
+  sample_rate: 16000
+  record_seconds: 5
+
+logging:
+  level: "INFO"
