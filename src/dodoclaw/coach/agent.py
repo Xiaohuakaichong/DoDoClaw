@@ -61,7 +61,12 @@ class CoachAgent:
                     "未设置 API Key。请在界面选择 Provider 并保存 Key，"
                     "或在 .env 中设置 LLM_API_KEY / 对应厂商 Key。"
                 )
-            self._client = OpenAI(api_key=self.api_key, base_url=self.base_url)
+            # timeout: connect 10s, total 60s — avoid silent hang on send
+            self._client = OpenAI(
+                api_key=self.api_key,
+                base_url=self.base_url,
+                timeout=60.0,
+            )
         return self._client
 
     def answer(
@@ -69,13 +74,19 @@ class CoachAgent:
         question: str,
         snapshot: GameSnapshot,
         draft_context: str = "",
+        knowledge_context: str = "",
     ) -> str:
         question = (question or "").strip()
         if not question:
             return ""
 
         context = snapshot.summary_for_llm()
-        user_msg = build_user_message(question, context, draft_context=draft_context)
+        user_msg = build_user_message(
+            question,
+            context,
+            draft_context=draft_context,
+            knowledge_context=knowledge_context,
+        )
         client = self._get_client()
 
         # Chat Completions: widest CN OpenAI-compatible coverage
@@ -86,8 +97,8 @@ class CoachAgent:
                     {"role": "system", "content": self.system_prompt},
                     {"role": "user", "content": user_msg},
                 ],
-                temperature=0.6,
-                max_tokens=400,
+                temperature=0.55,
+                max_tokens=500,
             )
             text = (resp.choices[0].message.content or "").strip()
         except Exception:
@@ -106,8 +117,17 @@ class CoachAgent:
                 )
                 text = (getattr(resp, "output_text", None) or str(resp)).strip()
             except Exception as exc:
+                msg = str(exc)
+                hint = ""
+                if "401" in msg or "invalid_api_key" in msg or "Incorrect API key" in msg:
+                    hint = " → API Key 无效或未保存，请重新粘贴并点「保存 Provider 配置」。"
+                elif "404" in msg or "model" in msg.lower():
+                    hint = " → 检查模型名是否在该 Provider 下可用。"
+                elif "timeout" in msg.lower() or "timed out" in msg.lower():
+                    hint = " → 网络超时，检查代理 / Base URL。"
                 raise RuntimeError(
-                    f"LLM 调用失败 [{self.provider_name}] {self.base_url} model={self.model}: {exc}"
+                    f"LLM 调用失败 [{self.provider_name}] {self.base_url} "
+                    f"model={self.model}: {exc}{hint}"
                 ) from exc
 
         if self.max_reply_chars and len(text) > self.max_reply_chars:

@@ -13,12 +13,23 @@ coach:
   # Optional overrides (empty = use provider defaults / .env)
   # base_url: "https://api.stepfun.com/step_plan/v1"
   # model: "step-3.7-flash"
-  max_reply_chars: 280
+  max_reply_chars: 400
   system_style: |
     你是 DoDoClaw，一名简洁、实战向的 Dota 2 语音教练。
-    结合当前 GSI 局势作答；信息不足时明确说明假设。
-    优先给出可执行建议（出装思路、站位、目标、时机），避免长篇理论。
-    用口语化中文，适合语音播报，单次回答尽量短。
+    结合 GSI 局势、Meta 与知识库（英雄机制/官方补丁）作答。
+    涉及技能与补丁数值时以知识库为准，勿与补丁冲突地编造。
+    优先可执行建议；口语化中文。
+
+# 英雄机制 + 官方补丁知识库（OpenDota constants + Valve patchnotes）
+knowledge:
+  enabled: true
+  language: "schinese"   # schinese | english
+  patch_last_n: 3        # 最近 N 个补丁
+  ttl_sec: 86400         # 缓存 24h 后自动再同步
+  top_k: 6
+  max_chars: 2800
+  # 本地索引: data/knowledge/index.json
+  # CLI: python -m dodoclaw knowledge-sync
 
 # BP / Meta — OpenDota (no token) and/or STRATZ (user token)
 meta:

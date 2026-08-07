@@ -96,6 +96,25 @@ class DoDoClawService:
         if self.meta_enabled:
             self._init_draft_advisor(meta_cfg)
 
+        # Patch + hero mechanics knowledge base
+        kb_cfg = self.yaml.get("knowledge") or {}
+        self.knowledge_enabled = bool(kb_cfg.get("enabled", True))
+        self._knowledge = None
+        if self.knowledge_enabled:
+            try:
+                from dodoclaw.knowledge.base import KnowledgeBase
+
+                self._knowledge = KnowledgeBase(
+                    language=str(kb_cfg.get("language") or "schinese"),
+                    patch_last_n=int(kb_cfg.get("patch_last_n") or 3),
+                    ttl_sec=int(kb_cfg.get("ttl_sec") or 24 * 3600),
+                )
+                # lazy sync on first ask; optional warm load of cache
+                self._knowledge.load()
+            except Exception:
+                logger.exception("knowledge base init failed")
+                self._knowledge = None
+
         self._gsi_updates = 0
 
     def _init_draft_advisor(self, meta_cfg: dict[str, Any] | None = None) -> None:
@@ -373,10 +392,43 @@ class DoDoClawService:
             provider_id=pid,
             provider_name=pname,
         )
-        self._log("info", f"LLM 已切换: {pname} / {mdl}")
+        self._log("info", f"LLM 已切换: {pname} / {mdl} @ {url}")
 
     def reload_api_key(self, api_key: str) -> None:
         self.reload_llm(api_key=api_key)
+
+    def sync_llm_from_ui(
+        self,
+        *,
+        provider_id: str,
+        api_key: str,
+        base_url: str,
+        model: str,
+    ) -> None:
+        """Lightweight sync without rebuilding voice stack (safe before each ask)."""
+        from dodoclaw.providers import get_provider
+
+        spec = get_provider(provider_id)
+        key = (api_key or "").strip()
+        url = (base_url or "").strip() or spec.base_url
+        mdl = (model or "").strip() or spec.default_model
+        if (
+            self.coach.api_key == key
+            and self.coach.base_url.rstrip("/") == url.rstrip("/")
+            and self.coach.model == mdl
+            and self.provider_id == spec.id
+        ):
+            return
+        self.provider_id = spec.id
+        self.provider_name = spec.name
+        self.coach.configure(
+            api_key=key,
+            base_url=url,
+            model=mdl,
+            provider_id=spec.id,
+            provider_name=spec.name,
+        )
+        logger.info("LLM sync: %s / %s", spec.name, mdl)
 
     def snapshot(self) -> GameSnapshot:
         return self.store.get()
@@ -454,37 +506,75 @@ class DoDoClawService:
                 logger.exception("draft speak failed")
         return text
 
+    def _knowledge_context(self, question: str, snap) -> str:
+        if not self._knowledge:
+            return ""
+        hero_keys: list[str] = []
+        if snap.hero_name:
+            hero_keys.append(snap.hero_name)
+        # also pull from abilities item names lightly via question only
+        try:
+            kb_cfg = self.yaml.get("knowledge") or {}
+            return self._knowledge.context_for(
+                question,
+                hero_keys=hero_keys,
+                top_k=int(kb_cfg.get("top_k") or 6),
+                max_chars=int(kb_cfg.get("max_chars") or 2800),
+            )
+        except Exception:
+            logger.exception("knowledge retrieve failed")
+            return ""
+
+    def sync_knowledge(self, *, force: bool = True) -> dict:
+        if not self._knowledge:
+            from dodoclaw.knowledge.base import KnowledgeBase
+
+            self._knowledge = KnowledgeBase()
+            self.knowledge_enabled = True
+        return self._knowledge.sync(force=force)
+
     def ask(self, question: str, speak: bool = True) -> str:
         question = (question or "").strip()
         if not question:
             return ""
         snap = self.snapshot()
-        self._log("info", f"你: {question}")
+        # Do not push Q/A into on_log — GUI already renders chat bubbles (avoids double messages)
+        logger.info("ask: %s", question[:120])
+        # Only pull heavy BP meta when relevant (avoid hanging casual chat)
         draft_ctx = self._draft_context_for(snap, question)
+        knowledge_ctx = self._knowledge_context(question, snap)
         try:
-            if self.coach.api_key:
-                answer = self.coach.answer(question, snap, draft_context=draft_ctx)
-            else:
-                # try refresh from settings once
+            key = (self.coach.api_key or "").strip()
+            if not key:
                 self.settings = reload_settings()
                 _pid, _pn, key, url, model = self.settings.resolve_llm()
                 if key:
                     self.coach.configure(api_key=key, base_url=url, model=model)
-                    answer = self.coach.answer(question, snap, draft_context=draft_ctx)
-                else:
-                    answer = self.coach.answer_offline_fallback(question, snap)
-                    if draft_ctx:
-                        answer = answer + "\n\n" + draft_ctx[:800]
+            if (self.coach.api_key or "").strip():
+                answer = self.coach.answer(
+                    question,
+                    snap,
+                    draft_context=draft_ctx,
+                    knowledge_context=knowledge_ctx,
+                )
+            else:
+                answer = self.coach.answer_offline_fallback(question, snap)
+                if knowledge_ctx:
+                    answer = answer + "\n\n" + knowledge_ctx[:1200]
+                if draft_ctx:
+                    answer = answer + "\n\n" + draft_ctx[:800]
         except Exception as exc:
             logger.exception("coach failed")
             answer = f"教练调用失败: {exc}"
 
-        self._log("info", f"DoDoClaw: {answer}")
-        if speak:
+        logger.info("answer: %s", (answer or "")[:160])
+        if speak and answer:
+            # Never block the reply path too long — TTS is best-effort
             try:
                 self.tts.speak(answer)
-            except Exception:
+            except Exception as exc:
                 logger.exception("TTS answer failed")
+                self._log("warning", f"TTS 播报失败（文字回复仍有效）: {exc}")
         return answer
 
     def listen_once(self) -> str:

@@ -88,7 +88,7 @@ class StepFunTTS(TextToSpeech):
 
         from dodoclaw.voice.audio_io import play_audio_file
 
-        client = OpenAI(api_key=self.api_key, base_url=self.base_url)
+        client = OpenAI(api_key=self.api_key, base_url=self.base_url, timeout=45.0)
         extra = {}
         if self.model.startswith("stepaudio-2.5") and self.instruction:
             extra["instruction"] = self.instruction
@@ -97,7 +97,6 @@ class StepFunTTS(TextToSpeech):
             out = Path(tmp.name)
 
         try:
-            # Prefer streaming response API if available
             try:
                 with client.audio.speech.with_streaming_response.create(
                     model=self.model,
@@ -116,7 +115,6 @@ class StepFunTTS(TextToSpeech):
                     response_format="mp3",
                     extra_body=extra or None,
                 )
-                # openai SDK: response content bytes
                 data = getattr(response, "content", None)
                 if data is None and hasattr(response, "read"):
                     data = response.read()
@@ -126,6 +124,8 @@ class StepFunTTS(TextToSpeech):
                 if data:
                     out.write_bytes(data)
 
+            if out.stat().st_size < 32:
+                raise RuntimeError("TTS 返回空音频（检查模型/音色/额度）")
             play_audio_file(out)
         finally:
             try:

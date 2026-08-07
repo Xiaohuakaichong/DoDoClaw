@@ -60,6 +60,36 @@ def cmd_health() -> int:
         return 1
 
 
+def cmd_knowledge_sync(force: bool = True) -> int:
+    from dodoclaw.knowledge.base import KnowledgeBase
+
+    yaml_cfg = get_settings().load_yaml()
+    kb_cfg = yaml_cfg.get("knowledge") or {}
+    kb = KnowledgeBase(
+        language=str(kb_cfg.get("language") or "schinese"),
+        patch_last_n=int(kb_cfg.get("patch_last_n") or 3),
+        ttl_sec=int(kb_cfg.get("ttl_sec") or 24 * 3600),
+    )
+    console.print("[cyan]正在同步英雄机制（OpenDota）+ 官方补丁（Valve）…[/cyan]")
+    try:
+        stats = kb.sync(force=force)
+    except Exception as exc:
+        console.print(f"[red]同步失败: {exc}[/red]")
+        return 1
+    console.print(f"[green]完成[/green] {stats}")
+    console.print(kb.stats())
+    return 0
+
+
+def cmd_knowledge_stats() -> int:
+    from dodoclaw.knowledge.base import KnowledgeBase
+
+    kb = KnowledgeBase()
+    kb.load()
+    console.print(kb.stats())
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="dodoclaw",
@@ -74,6 +104,11 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("cli", help="终端交互模式")
     sub.add_parser("install-gsi", help="安装 Dota 2 GSI 配置文件")
     sub.add_parser("health", help="检查本地 GSI /health")
+    sub.add_parser(
+        "knowledge-sync",
+        help="同步知识库：英雄技能机制 + 最近官方补丁",
+    )
+    sub.add_parser("knowledge-stats", help="查看本地知识库统计")
     return p
 
 
@@ -97,6 +132,10 @@ def main(argv: list[str] | None = None) -> None:
         raise SystemExit(cmd_install_gsi_cfg())
     if cmd == "health":
         raise SystemExit(cmd_health())
+    if cmd == "knowledge-sync":
+        raise SystemExit(cmd_knowledge_sync(force=True))
+    if cmd == "knowledge-stats":
+        raise SystemExit(cmd_knowledge_stats())
     parser.print_help()
     raise SystemExit(2)
 

@@ -115,6 +115,19 @@ DoDoClaw/
 **原理与是否「外挂」：** 见 [docs/GSI_AND_SAFETY.md](docs/GSI_AND_SAFETY.md)。  
 简要：Valve **官方 GSI**，客户端主动 POST 到 `127.0.0.1`，**无注入、不改内存**；本工具做教练建议，不自动操作游戏。
 
+## 知识库（英雄机制 + 官方补丁）
+
+教练回答会检索本地知识库（首次提问可自动同步，也可手动）：
+
+```powershell
+python -m dodoclaw knowledge-sync
+python -m dodoclaw knowledge-stats
+```
+
+- 英雄技能/机制：OpenDota constants  
+- 补丁改动：Valve 官方 patchnotes（最近 N 个版本）  
+- 详见 [docs/KNOWLEDGE.md](docs/KNOWLEDGE.md)
+
 ## BP / 选人指导
 
 - **实时盘面**：GSI `draft` 字段（双方 ban/pick）  

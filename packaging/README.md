@@ -4,10 +4,35 @@
 
 | 文件 | 说明 |
 |------|------|
-| `dist/DoDoClaw/DoDoClaw.exe` | 双击启动桌面 App |
+| `dist/DoDoClaw/DoDoClaw.exe` | **请运行这个**（完整目录，含 `_internal`） |
 | `dist/DoDoClaw-win64.zip` | 发给社区的便携包 |
 
 用户**无需安装 Python**。解压即用，配置写在 exe 同目录的 `.env`。
+
+### 常见错误：Failed to load Python DLL
+
+若双击报：
+
+```text
+Failed to load Python DLL
+...\build\dodoclaw\_internal\python314.dll
+```
+
+说明打开了 **`build\dodoclaw\DoDoClaw.exe`**。那是 PyInstaller **中间产物**，不能单独运行。
+
+正确路径：
+
+```text
+D:\Project\DoDoClaw\dist\DoDoClaw\DoDoClaw.exe
+```
+
+或：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\run_app.ps1
+```
+
+分发时只发整个 `dist\DoDoClaw\` 文件夹（或 zip），不要只拷一个 exe，也不要发 `build\`。
 
 ## 一键构建（开发者）
 
