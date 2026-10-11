@@ -116,6 +116,13 @@ class DoDoClawService:
                 self._knowledge = None
 
         self._gsi_updates = 0
+        self._recorder = None
+        if self.settings.gsi_record:
+            from dodoclaw.gsi.recorder import GsiRecorder
+            from dodoclaw.paths import app_dir
+
+            self._recorder = GsiRecorder(app_dir() / "logs" / "gsi")
+            self._log("info", f"GSI 采样已开启: {app_dir() / 'logs' / 'gsi'}")
 
     def _init_draft_advisor(self, meta_cfg: dict[str, Any] | None = None) -> None:
         meta_cfg = meta_cfg or (self.yaml.get("meta") or {})
@@ -277,8 +284,10 @@ class DoDoClawService:
         except Exception:
             logger.exception("on_log failed")
 
-    def _on_gsi(self, _payload: dict[str, Any]) -> None:
+    def _on_gsi(self, payload: dict[str, Any]) -> None:
         self._gsi_updates += 1
+        if self._recorder is not None:
+            self._recorder.record(payload)
         snap = self.store.get()
         if self._gsi_updates == 1:
             self._log("info", "已收到首包 GSI 数据")
@@ -339,6 +348,8 @@ class DoDoClawService:
             return
         self._stop.set()
         self.gsi.stop()
+        if self._recorder is not None:
+            self._recorder.close()
         time.sleep(0.2)
         self._started = False
         self._log("info", "服务已停止")

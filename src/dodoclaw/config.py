@@ -56,6 +56,8 @@ class Settings(BaseSettings):
     gsi_host: str = Field(default="127.0.0.1", alias="GSI_HOST")
     gsi_port: int = Field(default=3000, alias="GSI_PORT")
     gsi_auth_token: str = Field(default="dodoclaw_secret", alias="GSI_AUTH_TOKEN")
+    # Write raw GSI payloads to logs/gsi/*.jsonl (for debugging / sample collection)
+    gsi_record: bool = Field(default=False, alias="GSI_RECORD")
 
     # Voice / ASR / TTS
     stt_backend: str = Field(default="mock", alias="STT_BACKEND")
