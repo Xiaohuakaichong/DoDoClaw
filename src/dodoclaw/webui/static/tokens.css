@@ -1,0 +1,38 @@
+/* DoDoClaw v2 · WebView2 (Chromium) 设计 token。pywebview 直接加载。 */
+@font-face{font-family:"DC Num";src:local("Barlow Condensed SemiBold"),local("BarlowCondensed-SemiBold"),url("fonts/BarlowCondensed-SemiBold.woff2") format("woff2");font-weight:600}
+@font-face{font-family:"DC Num";src:local("Barlow Condensed Bold"),local("BarlowCondensed-Bold"),url("fonts/BarlowCondensed-Bold.woff2") format("woff2");font-weight:700}
+:root{
+  /* 底色：偏冷的近黑，叠一层暖色光晕，像 Dota 客户端的夜色 */
+  --bg-0:#06080c; --bg-1:#0b0e14; --bg-2:#111520;
+  --glass:rgba(20,24,34,.62); --glass-strong:rgba(14,17,25,.86);
+  --line:rgba(255,255,255,.07); --line-2:rgba(255,255,255,.12);
+  --text:#f2f4f8; --text-2:#aab1bf; --text-3:#6b7384;
+  /* 品牌：熔岩红 → 琥珀 的渐变，只给主操作、当前项和强时效提醒 */
+  --brand:#e5482f; --brand-2:#ff8a3d; --brand-grad:linear-gradient(135deg,#e5482f 0%,#ff7a36 100%);
+  --brand-glow:0 0 0 1px rgba(255,120,60,.35),0 8px 28px rgba(229,72,47,.35);
+  --gold:#f3c26b;              /* 稀有度/重点数字 */
+  --ok:#3fdc97; --warn:#ffbe55; --danger:#ff5d6c; --info:#62a8ff;
+  --radiant:#7bd36b; --dire:#ff6a4d;
+  --r-s:8px; --r-m:14px; --r-l:20px; --r-pill:999px;
+  --shadow-1:0 1px 0 rgba(255,255,255,.04) inset,0 10px 30px rgba(0,0,0,.45);
+  --shadow-2:0 1px 0 rgba(255,255,255,.06) inset,0 20px 60px rgba(0,0,0,.6);
+  --font:"Microsoft YaHei UI","Segoe UI Variable Text","Noto Sans CJK SC","PingFang SC",sans-serif;
+  --num:"DC Num","Barlow Condensed","Bahnschrift",sans-serif;
+  --ease:cubic-bezier(.2,.8,.2,1); --dur-1:120ms; --dur-2:220ms; --dur-3:420ms;
+}
+@media (prefers-reduced-motion:reduce){:root{--dur-1:0ms;--dur-2:0ms;--dur-3:0ms}}
+.reduce-motion *{animation:none!important;transition:none!important}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--font);color:var(--text);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
+.num{font-family:var(--num);font-weight:600;letter-spacing:.3px}
+.ico{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.glass{background:var(--glass);border:1px solid var(--line);border-radius:var(--r-m);box-shadow:var(--shadow-1);backdrop-filter:blur(18px) saturate(140%)}
+.chip{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 12px;border-radius:var(--r-pill);background:rgba(255,255,255,.05);border:1px solid var(--line);font-size:12px;color:var(--text-2)}
+.dot{width:7px;height:7px;border-radius:50%;flex:none}
+.dot.ok{background:var(--ok);box-shadow:0 0 8px var(--ok)}.dot.warn{background:var(--warn);box-shadow:0 0 8px var(--warn)}.dot.err{background:var(--danger);box-shadow:0 0 8px var(--danger)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:40px;padding:0 18px;border-radius:var(--r-s);font:600 14px var(--font);border:1px solid transparent;color:var(--text);cursor:pointer;transition:transform var(--dur-1) var(--ease),filter var(--dur-1)}
+.btn:hover{filter:brightness(1.08)}.btn:active{transform:translateY(1px)}
+.btn.primary{background:var(--brand-grad);box-shadow:var(--brand-glow);color:#fff}
+.btn.ghost{background:rgba(255,255,255,.04);border-color:var(--line-2)}
+.btn.icon{width:40px;padding:0}
+.label{font-size:11px;letter-spacing:1.6px;color:var(--text-3);font-weight:700}

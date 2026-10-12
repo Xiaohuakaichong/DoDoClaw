@@ -1,0 +1,88 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><title>DoDoClaw 小窗</title><link rel="stylesheet" href="tokens.css">
+<style>
+html,body{background:transparent;overflow:hidden;user-select:none}
+
+.ov{position:relative;width:320px;border-radius:16px;background:rgba(9,11,16,.88);border:1px solid rgba(255,255,255,.09);
+ box-shadow:0 18px 40px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.05);overflow:hidden;font-size:13px}
+.ov .hd{display:flex;align-items:center;gap:8px;padding:10px 10px 8px 12px}
+.ov .grip{color:var(--text-3);width:14px;height:14px}
+.clock{font:700 30px var(--num);line-height:1;letter-spacing:.5px}
+.dn{display:flex;align-items:center;gap:4px;font-size:11px;color:var(--text-2);background:rgba(255,255,255,.05);border-radius:99px;padding:2px 8px}
+.ov .sp{flex:1}
+.ib{width:30px;height:30px;border-radius:9px;display:flex;align-items:center;justify-content:center;color:var(--text-2)}
+.ib.on{background:rgba(98,168,255,.14);color:var(--info)}
+.ib .ico{width:16px;height:16px}
+.tm{display:flex;align-items:center;gap:10px;padding:7px 12px}
+.tm img,.tm .gl{width:26px;height:26px;border-radius:7px;flex:none;object-fit:cover}
+.tm .gl{display:flex;align-items:center;justify-content:center}
+.tm .gl .ico{width:15px;height:15px}
+.tm .m{flex:1;min-width:0}
+.tm .n{font-size:12.5px;color:var(--text-2);display:flex;justify-content:space-between}
+.tm .n b{font:700 17px var(--num);color:var(--text);line-height:1}
+.bar{height:3px;border-radius:2px;background:rgba(255,255,255,.07);margin-top:5px;overflow:hidden}
+.bar i{display:block;height:100%;border-radius:2px}
+.ans{margin:6px 10px 0;padding:10px 12px;border-radius:12px;background:linear-gradient(135deg,rgba(255,255,255,.05),rgba(255,255,255,.02));border:1px solid rgba(255,255,255,.06);line-height:1.55}
+.ans .who{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-3);margin-bottom:3px}
+.ans b{color:var(--brand-2)}
+.in{display:flex;gap:6px;padding:10px}
+.in .f{flex:1;height:36px;border-radius:10px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.07);display:flex;align-items:center;padding:0 12px;color:var(--text-3);font-size:12px}
+.in .mic{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.07)}
+.in .mic.live{background:var(--brand-grad);box-shadow:var(--brand-glow);color:#fff}
+.wave{display:inline-flex;gap:2px;align-items:center;height:14px}
+.wave i{width:3px;border-radius:2px;background:var(--brand-2);animation:w 900ms var(--ease) infinite alternate}
+.wave i:nth-child(2){animation-delay:-200ms}.wave i:nth-child(3){animation-delay:-400ms}.wave i:nth-child(4){animation-delay:-600ms}
+@keyframes w{from{transform:scaleY(.35)}to{transform:scaleY(1)}}
+/* strong alert */
+.ov.hot{border-color:rgba(255,138,61,.55);box-shadow:0 0 0 1px rgba(255,138,61,.25),0 0 40px rgba(229,72,47,.45),0 18px 40px rgba(0,0,0,.55)}
+.alert{margin:0 10px;border-radius:12px;padding:12px;display:flex;align-items:center;gap:12px;background:linear-gradient(135deg,rgba(229,72,47,.35),rgba(255,138,61,.12));border:1px solid rgba(255,138,61,.4)}
+.alert .t{font-weight:800;font-size:15px}.alert .s{font-size:11px;color:#ffd2b8}
+.ring{width:48px;height:48px;flex:none;position:relative}
+.ring svg{width:48px;height:48px;transform:rotate(-90deg)}
+.ring b{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font:700 17px var(--num)}
+.soft{margin:6px 10px 0;border-radius:10px;padding:8px 10px;display:flex;align-items:center;gap:8px;background:rgba(255,190,85,.1);border:1px solid rgba(255,190,85,.25);color:var(--warn);font-size:12.5px;font-weight:700}
+.pill{position:relative;width:250px;height:40px;border-radius:99px;background:rgba(9,11,16,.88);border:1px solid rgba(255,255,255,.09);display:flex;align-items:center;gap:10px;padding:0 6px 0 14px;box-shadow:0 12px 30px rgba(0,0,0,.5)}
+
+.hd{cursor:default}
+.ib{cursor:pointer}.ib:hover{background:rgba(255,255,255,.06)}
+.tm .gl.ic{overflow:hidden}.tm .gl.ic img{width:26px;height:26px}
+.in input{flex:1;height:36px;border-radius:10px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.07);padding:0 12px;color:var(--text);font:12px var(--font);outline:0}
+.in input:focus{border-color:rgba(255,138,61,.5)}
+.in input::placeholder{color:var(--text-3)}
+.in .mic{cursor:pointer}
+.ans{max-height:96px;overflow:hidden}
+.ans.err{color:var(--danger)}
+.bar i{transform-origin:left;transition:transform 1s linear}
+.ov.hot{animation:flash 900ms var(--ease) 1}
+@keyframes flash{0%{box-shadow:0 0 0 0 rgba(229,72,47,0)}40%{box-shadow:0 0 0 2px rgba(255,138,61,.6),0 0 60px rgba(229,72,47,.7)}100%{}}
+[hidden]{display:none!important}
+</style></head><body>
+<svg width="0" height="0" style="position:absolute"><defs>
+<symbol id="home" viewBox="0 0 24 24"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/></symbol>
+<symbol id="bp" viewBox="0 0 24 24"><path d="M4 4l6 6M10 4L4 10"/><path d="M14 14l6 6M20 14l-6 6"/><path d="M14 4h6v6M4 14h6v6"/></symbol>
+<symbol id="chat" viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/></symbol>
+<symbol id="hist" viewBox="0 0 24 24"><path d="M4 19V9M10 19V5M16 19v-7M22 19H2"/></symbol>
+<symbol id="set" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></symbol>
+<symbol id="mic" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></symbol>
+<symbol id="vol" viewBox="0 0 24 24"><path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11"/></symbol>
+<symbol id="send" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+<symbol id="expand" viewBox="0 0 24 24"><path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7"/></symbol>
+<symbol id="min" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
+<symbol id="x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+<symbol id="grip" viewBox="0 0 24 24"><path d="M9 6v.5M15 6v.5M9 12v.5M15 12v.5M9 18v.5M15 18v.5"/></symbol>
+<symbol id="rune" viewBox="0 0 24 24"><path d="M12 2l7 10-7 10-7-10z"/><path d="M12 7l3.5 5L12 17l-3.5-5z"/></symbol>
+<symbol id="shrine" viewBox="0 0 24 24"><path d="M4 20h16M6 20V10l6-6 6 6v10M10 20v-5h4v5"/></symbol>
+<symbol id="cube" viewBox="0 0 24 24"><path d="M12 2l9 5v10l-9 5-9-5V7z"/><path d="M12 12l9-5M12 12v10M12 12L3 7"/></symbol>
+<symbol id="coin" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v10M9 9.5h4.5a2 2 0 0 1 0 4H10a2 2 0 0 0 0 4h5"/></symbol>
+<symbol id="spark" viewBox="0 0 24 24"><path d="M12 3l2.2 6.8L21 12l-6.8 2.2L12 21l-2.2-6.8L3 12l6.8-2.2z"/></symbol>
+</defs></svg>
+<div class="ov" id="ov">
+ <div class="hd pywebview-drag-region" id="hd"><svg class="ico grip"><use href="#grip"/></svg><span class="dot warn" id="dot"></span><span class="clock" id="clock">--:--</span><span class="dn" id="dn" hidden></span><span class="sp"></span><span class="ib" id="vol" title="播报状态"><svg class="ico"><use href="#vol"/></svg></span><span class="ib" id="cmp" title="收起"><svg class="ico"><use href="#expand"/></svg></span></div>
+ <div class="alert" id="alert" hidden><div class="ring"><svg viewBox="0 0 48 48"><circle cx="24" cy="24" r="20" stroke="rgba(255,255,255,.12)" stroke-width="4" fill="none"/><circle id="ring" cx="24" cy="24" r="20" stroke="url(#gr)" stroke-width="4" fill="none" stroke-linecap="round" stroke-dasharray="125.6" stroke-dashoffset="0"/><defs><linearGradient id="gr"><stop offset="0" stop-color="#e5482f"/><stop offset="1" stop-color="#ffb066"/></linearGradient></defs></svg><b id="ring-n">8</b></div>
+  <div><div class="t" id="alert-t"></div><div class="s" id="alert-s"></div></div></div>
+ <div class="soft" id="soft" hidden><svg class="ico" style="width:15px;height:15px"><use href="#spark"/></svg><span id="soft-t"></span></div>
+ <div id="timers"></div>
+ <div class="ans" id="ans" hidden><div class="who" id="ans-who"></div><div id="ans-t"></div></div>
+ <div class="in"><input id="q" placeholder="打字提问，Enter 发送 · Esc 还给游戏" autocomplete="off"><span class="mic" id="mic"><svg class="ico" style="width:16px;height:16px"><use href="#mic"/></svg></span></div>
+</div>
+<div class="pill pywebview-drag-region" id="pill" hidden><span class="dot ok" id="pdot"></span><span class="clock" style="font-size:20px" id="pclock">--:--</span><span style="font-size:12px;color:var(--text-2)" id="pnext"></span><span style="flex:1"></span><span class="ib" id="exp"><svg class="ico"><use href="#expand"/></svg></span></div>
+<script src="common.js"></script><script src="overlay.js"></script></body></html>

@@ -46,6 +46,12 @@ def cmd_run_gui() -> int:
     return run_gui()
 
 
+def cmd_run_webui(debug: bool = False) -> int:
+    from dodoclaw.webui.app import run_webui
+
+    return run_webui(debug=debug)
+
+
 def cmd_health() -> int:
     import httpx
 
@@ -102,6 +108,8 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("gui", help="启动桌面 App（默认，适合社区分发）")
     sub.add_parser("run", help="同 gui")
     sub.add_parser("cli", help="终端交互模式")
+    w = sub.add_parser("webui", help="新界面原型（pywebview / WebView2）")
+    w.add_argument("--debug", action="store_true", help="打开 WebView 开发者工具")
     sub.add_parser("install-gsi", help="安装 Dota 2 GSI 配置文件")
     sub.add_parser("health", help="检查本地 GSI /health")
     sub.add_parser(
@@ -126,6 +134,8 @@ def main(argv: list[str] | None = None) -> None:
     cmd = args.command or "gui"
     if cmd in {"gui", "run"}:
         raise SystemExit(cmd_run_gui())
+    if cmd == "webui":
+        raise SystemExit(cmd_run_webui(debug=getattr(args, "debug", False)))
     if cmd == "cli":
         raise SystemExit(cmd_run_cli())
     if cmd == "install-gsi":

@@ -33,6 +33,10 @@ speech = [
     "edge-tts>=6.1.12",
     "pygame>=2.6.0",
 ]
+# New web UI layer (prototype): WebView2 via pywebview
+webui = [
+    "pywebview>=5.0",
+]
 # Desktop packaging extras
 app = [
     "customtkinter>=5.2.2",
@@ -49,6 +53,9 @@ dodoclaw-gui = "dodoclaw.gui.app:run_gui"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+dodoclaw = ["webui/static/*", "data/*.json"]
 
 [tool.ruff]
 line-length = 100

@@ -1,0 +1,165 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><title>DoDoClaw</title><link rel="stylesheet" href="tokens.css">
+<style>
+html,body{height:100%;background:var(--bg-0);overflow:hidden;user-select:none}
+.win{width:100vw;height:100vh;position:relative;overflow:hidden;background:
+ radial-gradient(900px 500px at 78% -10%,rgba(229,72,47,.22),transparent 60%),
+ radial-gradient(700px 500px at -10% 110%,rgba(98,168,255,.10),transparent 60%),var(--bg-0);
+ display:grid;grid-template-columns:76px 1fr;grid-template-rows:44px 1fr}
+.tb{grid-column:1/3;display:flex;align-items:center;gap:10px;padding:0 0 0 18px;-webkit-app-region:drag}
+.logo{width:26px;height:26px;border-radius:8px;background:var(--brand-grad);box-shadow:var(--brand-glow);display:flex;align-items:center;justify-content:center;font:700 15px var(--num);color:#fff}
+.tb .name{font:700 15px var(--num);letter-spacing:1.5px}
+.tb .stat{margin-left:auto;display:flex;gap:8px;-webkit-app-region:no-drag}
+.wc{display:flex;margin-left:12px}.wc span{width:46px;height:44px;display:flex;align-items:center;justify-content:center;color:var(--text-3)}
+.wc .ico{width:14px;height:14px}
+.rail{display:flex;flex-direction:column;align-items:center;gap:6px;padding-top:10px}
+.rail a{width:56px;height:56px;border-radius:14px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;color:var(--text-3);font-size:11px;position:relative}
+.rail a.on{color:#fff;background:linear-gradient(180deg,rgba(229,72,47,.28),rgba(229,72,47,.08));box-shadow:inset 0 0 0 1px rgba(255,120,60,.35)}
+.rail a.on::before{content:"";position:absolute;left:-10px;top:16px;bottom:16px;width:3px;border-radius:2px;background:var(--brand-grad);box-shadow:0 0 10px var(--brand)}
+.rail .ico{width:20px;height:20px}
+.rail .sp{flex:1}
+.page{padding:6px 24px 24px 8px;display:grid;grid-template-columns:1fr 316px;grid-template-rows:212px 1fr auto;gap:16px;min-height:0}
+/* hero banner */
+.hero{grid-column:1/2;position:relative;border-radius:var(--r-l);overflow:hidden;box-shadow:var(--shadow-2);border:1px solid var(--line)}
+.hero .art{position:absolute;inset:0;background-position:right center;background-size:auto 128%;background-repeat:no-repeat;transition:opacity var(--dur-3)}
+.hero .blur{position:absolute;inset:0;background-size:cover;background-position:center;filter:blur(30px) saturate(150%);opacity:.55;transform:scale(1.2)}
+.hero .fade{position:absolute;inset:0;background:linear-gradient(90deg,var(--bg-0) 18%,rgba(6,8,12,.75) 48%,rgba(6,8,12,.05) 80%)}
+.hero .in{position:relative;padding:24px 28px;height:100%;display:flex;flex-direction:column}
+.hero h1{font-size:30px;font-weight:800;letter-spacing:.5px;margin-top:6px;line-height:1.2}
+.hero h1 em{font-style:normal;background:var(--brand-grad);-webkit-background-clip:text;color:transparent}
+.hero p{color:var(--text-2);font-size:14px;margin-top:6px;max-width:400px}
+.hero .row{margin-top:auto;display:flex;gap:10px;align-items:center}
+.pulse{width:8px;height:8px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 0 rgba(63,220,151,.6);animation:pulse 2.4s var(--ease) infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(63,220,151,.55)}70%{box-shadow:0 0 0 10px rgba(63,220,151,0)}100%{box-shadow:0 0 0 0 rgba(63,220,151,0)}}
+/* status column */
+.side{grid-column:2;grid-row:1/3;display:flex;flex-direction:column;gap:16px;min-height:0}
+.st{padding:14px 16px;display:flex;gap:12px;align-items:center}
+.st .ic{width:38px;height:38px;border-radius:11px;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.05);border:1px solid var(--line)}
+.st .t{font-weight:700;font-size:14px}.st .d{font-size:12px;color:var(--text-3)}
+.st .r{margin-left:auto;font-size:12px}
+.st.err{border-color:rgba(255,93,108,.35);background:linear-gradient(135deg,rgba(255,93,108,.14),rgba(20,24,34,.62))}
+.st.err .ic{color:var(--danger);background:rgba(255,93,108,.12);border-color:rgba(255,93,108,.3)}
+.fix{white-space:nowrap;font-size:12px;font-weight:700;color:#fff;background:var(--brand-grad);border-radius:6px;padding:4px 10px;box-shadow:var(--brand-glow)}
+/* reminders */
+.rem{grid-column:1;padding:18px 20px;display:flex;flex-direction:column;min-height:0}
+.hd{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.hd h2{font-size:16px;font-weight:800}
+.hd .more{margin-left:auto;font-size:12px;color:var(--text-2)}
+.rlist{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.ri{border-radius:12px;padding:12px;background:linear-gradient(180deg,rgba(255,255,255,.045),rgba(255,255,255,.015));border:1px solid var(--line);display:flex;flex-direction:column;gap:8px;position:relative;overflow:hidden}
+.ri .top{display:flex;align-items:center;gap:8px}
+.ri img,.ri .gl{width:30px;height:30px;border-radius:8px;object-fit:cover;flex:none}
+.ri .gl{display:flex;align-items:center;justify-content:center;background:rgba(98,168,255,.12);color:var(--info)}
+.ri .n{font-weight:700;font-size:13px;line-height:1.25}.ri .s{font-size:11px;color:var(--text-3)}
+.ri .lead{font:600 22px var(--num);line-height:1}
+.ri .lead small{font-size:12px;color:var(--text-3);margin-left:3px;font-family:var(--font);font-weight:400}
+.ri.off{opacity:.42}
+.ri .tg{position:absolute;right:10px;top:10px;width:28px;height:16px;border-radius:8px;background:var(--brand-grad)}
+.ri .tg::after{content:"";position:absolute;right:2px;top:2px;width:12px;height:12px;border-radius:50%;background:#fff}
+.ri.off .tg{background:rgba(255,255,255,.12)}.ri.off .tg::after{right:auto;left:2px;background:var(--text-3)}
+.tl{margin-top:auto;padding-top:14px}
+.tlh{display:flex;align-items:center;margin-bottom:8px}
+.axis{position:relative;height:22px;border-radius:6px;background:linear-gradient(90deg,rgba(255,255,255,.03),rgba(255,255,255,.06));border:1px solid var(--line)}
+.axis i{position:absolute;top:5px;width:4px;height:10px;border-radius:2px;margin-left:-2px;box-shadow:0 0 6px currentColor}
+.ticks{display:flex;justify-content:space-between;font:600 11px var(--num);color:var(--text-3);margin-top:3px}
+/* last match */
+.last{padding:16px;display:flex;flex-direction:column;gap:12px;flex:1;min-height:0}
+.lm{display:flex;gap:12px;align-items:center}
+.lm img{width:84px;height:47px;border-radius:8px;object-fit:cover;box-shadow:0 6px 18px rgba(0,0,0,.5)}
+.win-tag{font:700 12px var(--num);letter-spacing:1px;color:#07140d;background:var(--ok);border-radius:4px;padding:1px 7px}
+.kda{display:flex;gap:16px}
+.kda div{display:flex;flex-direction:column}.kda b{font:700 24px var(--num);line-height:1.1}.kda span{font-size:11px;color:var(--text-3)}
+.items{display:flex;gap:4px}
+.items img{width:40px;height:29px;border-radius:4px;box-shadow:0 0 0 1px rgba(0,0,0,.6),0 3px 8px rgba(0,0,0,.4)}
+.tip{font-size:12.5px;color:var(--text-2);display:flex;gap:8px;line-height:1.5}
+.tip b{font:700 14px var(--num);color:var(--brand-2)}
+/* ask */
+.ask{grid-column:1/3;display:flex;gap:10px;align-items:center;padding:8px 8px 8px 18px;border-radius:16px;background:var(--glass-strong);border:1px solid var(--line-2);box-shadow:var(--shadow-2)}
+.ask .ph{flex:1;color:var(--text-3);font-size:14px}
+.ask .k{font:600 12px var(--num);color:var(--text-3);border:1px solid var(--line-2);border-radius:5px;padding:0 6px;margin-right:6px}
+.mic{width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.06);border:1px solid var(--line-2)}
+.sample{position:absolute;left:150px;top:14px;font-size:10px;color:var(--text-3);opacity:.7}
+
+.wc span{cursor:pointer}.wc span:hover{color:var(--text);background:rgba(255,255,255,.06)}.wc span.x:hover{background:#c42b1c;color:#fff}
+.rail a{cursor:pointer}.rail a.soon{opacity:.45;cursor:default}
+.ask input{flex:1;background:transparent;border:0;outline:0;color:var(--text);font:14px var(--font)}
+.ask input::placeholder{color:var(--text-3)}
+.mic,.btn{cursor:pointer}.mic.live{background:var(--brand-grad);box-shadow:var(--brand-glow);color:#fff}
+.btn[disabled]{opacity:.5;pointer-events:none}
+.lm .por{width:84px;height:47px;border-radius:8px;overflow:hidden;box-shadow:0 6px 18px rgba(0,0,0,.5);background:rgba(255,255,255,.05);display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--text-2)}
+.lm .por img{width:100%;height:100%;object-fit:cover}
+.items .it{width:40px;height:29px;border-radius:4px;overflow:hidden;box-shadow:0 0 0 1px rgba(0,0,0,.6);background:rgba(255,255,255,.05);font-size:9px;color:var(--text-3);display:flex;align-items:center;justify-content:center;text-align:center;line-height:1}
+.items .it img{width:100%;height:100%;object-fit:cover}
+.ri .gl.ic img{width:30px;height:30px;border-radius:8px}
+.answer{font-size:13.5px;line-height:1.6;color:var(--text);white-space:pre-wrap;overflow:auto;max-height:100%}
+.answer .meta{font-size:11px;color:var(--text-3);margin-bottom:4px}
+.answer.err{color:var(--danger)}
+.live-timers{display:flex;gap:10px;flex-wrap:wrap}
+.lt{flex:1;min-width:150px;border-radius:10px;padding:8px 10px;background:rgba(255,255,255,.03);border:1px solid var(--line)}
+.lt .n{font-size:12px;color:var(--text-2);display:flex;justify-content:space-between}.lt b{font:700 18px var(--num);color:var(--text)}
+.lt .bar{height:3px;border-radius:2px;background:rgba(255,255,255,.07);margin-top:5px;overflow:hidden}.lt .bar i{display:block;height:100%;transform-origin:left;transition:transform 1s linear}
+.toggle{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-2);cursor:pointer}
+.proto{position:absolute;left:150px;top:14px;font-size:10px;color:var(--text-3);opacity:.7}
+</style></head><body>
+<svg width="0" height="0" style="position:absolute"><defs>
+<symbol id="home" viewBox="0 0 24 24"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/></symbol>
+<symbol id="bp" viewBox="0 0 24 24"><path d="M4 4l6 6M10 4L4 10"/><path d="M14 14l6 6M20 14l-6 6"/><path d="M14 4h6v6M4 14h6v6"/></symbol>
+<symbol id="chat" viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/></symbol>
+<symbol id="hist" viewBox="0 0 24 24"><path d="M4 19V9M10 19V5M16 19v-7M22 19H2"/></symbol>
+<symbol id="set" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></symbol>
+<symbol id="mic" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></symbol>
+<symbol id="vol" viewBox="0 0 24 24"><path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11"/></symbol>
+<symbol id="send" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+<symbol id="expand" viewBox="0 0 24 24"><path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7"/></symbol>
+<symbol id="min" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
+<symbol id="x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+<symbol id="grip" viewBox="0 0 24 24"><path d="M9 6v.5M15 6v.5M9 12v.5M15 12v.5M9 18v.5M15 18v.5"/></symbol>
+<symbol id="rune" viewBox="0 0 24 24"><path d="M12 2l7 10-7 10-7-10z"/><path d="M12 7l3.5 5L12 17l-3.5-5z"/></symbol>
+<symbol id="shrine" viewBox="0 0 24 24"><path d="M4 20h16M6 20V10l6-6 6 6v10M10 20v-5h4v5"/></symbol>
+<symbol id="cube" viewBox="0 0 24 24"><path d="M12 2l9 5v10l-9 5-9-5V7z"/><path d="M12 12l9-5M12 12v10M12 12L3 7"/></symbol>
+<symbol id="coin" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v10M9 9.5h4.5a2 2 0 0 1 0 4H10a2 2 0 0 0 0 4h5"/></symbol>
+<symbol id="spark" viewBox="0 0 24 24"><path d="M12 3l2.2 6.8L21 12l-6.8 2.2L12 21l-2.2-6.8L3 12l6.8-2.2z"/></symbol>
+</defs></svg>
+<div class="win">
+ <div class="tb pywebview-drag-region"><div class="logo">D</div><span class="name">DODOCLAW</span>
+  <div class="stat">
+   <span class="chip" id="chip-gsi"><span class="dot warn"></span>等待 Dota</span>
+   <span class="chip" id="chip-coach"><span class="dot warn"></span>教练</span>
+   <span class="chip" id="chip-voice"><svg class="ico" style="width:14px;height:14px"><use href="#vol"/></svg><span>播报</span></span>
+   <span class="chip toggle" id="btn-ov" title="显示/隐藏对局小窗"><svg class="ico" style="width:14px;height:14px"><use href="#expand"/></svg>小窗</span>
+  </div>
+  <div class="wc"><span id="btn-min"><svg class="ico"><use href="#min"/></svg></span><span class="x" id="btn-close"><svg class="ico"><use href="#x"/></svg></span></div></div>
+ <nav class="rail">
+  <a class="on"><svg class="ico"><use href="#home"/></svg>首页</a>
+  <a class="soon" title="原型阶段未迁移"><svg class="ico"><use href="#bp"/></svg>BP</a>
+  <a class="soon" title="原型阶段未迁移"><svg class="ico"><use href="#chat"/></svg>对话</a>
+  <a class="soon" title="原型阶段未迁移"><svg class="ico"><use href="#hist"/></svg>复盘</a>
+  <span class="sp"></span>
+  <a class="soon" title="原型阶段未迁移"><svg class="ico"><use href="#set"/></svg>设置</a>
+ </nav>
+ <main class="page">
+  <section class="hero"><div class="blur" id="hero-blur"></div><div class="art" id="hero-art"></div><div class="fade"></div>
+   <div class="in"><span class="label" id="hero-label">READY · 等待下一局</span>
+    <h1 id="hero-h1">下一局，<em>我帮你盯着</em></h1>
+    <p id="hero-p">进入对局后小窗会自动出现。打字或点麦克风都能提问。</p>
+    <div class="row"><span class="chip" id="hero-gsi"><span class="pulse"></span>GSI · <span id="gsi-addr">127.0.0.1:3000</span></span><span class="chip" id="hero-day" hidden></span><span class="chip" id="hero-pkts">0 包</span></div></div>
+  </section>
+  <aside class="side">
+   <div class="glass st" id="st-gsi"><div class="ic"><svg class="ico"><use href="#spark"/></svg></div><div><div class="t">连接 Dota</div><div class="d" id="st-gsi-d">还没收到数据</div></div><span class="r" id="st-gsi-r">等待</span></div>
+   <div class="glass st" id="st-coach"><div class="ic"><svg class="ico"><use href="#chat"/></svg></div><div><div class="t">AI 教练</div><div class="d" id="st-coach-d">—</div></div><span class="r" id="st-coach-r">—</span></div>
+   <div class="glass st" id="st-voice"><div class="ic" style="color:var(--info)"><svg class="ico"><use href="#vol"/></svg></div><div><div class="t">语音播报</div><div class="d" id="st-voice-d">—</div></div><label class="r toggle"><input type="checkbox" id="rm"> 减少动效</label></div>
+   <div class="glass last">
+    <div class="hd" style="margin:0"><h2 id="cur-title">本局</h2><span class="more" id="cur-clock">—</span></div>
+    <div class="lm"><div class="por" id="cur-por">—</div><div><div style="font-weight:800" id="cur-hero">还没进对局</div><div class="items" id="cur-items" style="margin-top:6px"></div></div></div>
+    <div class="kda"><div><b id="cur-kda">0/0/0</b><span>K / D / A</span></div><div><b style="color:var(--gold)" id="cur-gold">0</b><span>金钱</span></div><div><b id="cur-lh">0/0</b><span>正补/反补</span></div></div>
+   </div>
+  </aside>
+  <section class="glass rem">
+   <div class="hd"><h2>教练</h2><span class="more" id="ans-meta"></span></div>
+   <div class="answer" id="answer"><span style="color:var(--text-3)">问点什么吧。对局里问，会结合实时局势回答。</span></div>
+   <div class="tl"><div class="tlh"><span class="label">实时计时</span></div><div class="live-timers" id="timers"><span style="color:var(--text-3);font-size:12px">进入对局后显示神龛、魔方、肉山、盾的倒计时</span></div></div>
+  </section>
+  <div class="ask"><svg class="ico" style="color:var(--brand-2)"><use href="#spark"/></svg><input id="q" placeholder="问教练，比如“对面斧王，我幻刺先出什么？”" autocomplete="off"><span class="k">ENTER</span><span class="mic" id="mic"><svg class="ico"><use href="#mic"/></svg></span><span class="btn primary" id="send">提问<svg class="ico" style="width:16px;height:16px"><use href="#send"/></svg></span></div>
+ </main>
+ <span class="proto">原型 · 英雄与物品图标 © Valve，运行时下载 · 非 Valve 官方</span>
+</div>
+<script src="common.js"></script><script src="main.js"></script></body></html>

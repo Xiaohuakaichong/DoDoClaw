@@ -1,0 +1,1212 @@
+{
+ "source": "Valve datafeed herolist (schinese) 2026-10-12; aliases = 社区常用叫法，Dota顾问整理，非官方",
+ "patch": "7.41f",
+ "ambiguous": {},
+ "heroes": [
+  {
+   "id": 1,
+   "key": "npc_dota_hero_antimage",
+   "name_zh": "敌法师",
+   "name_en": "Anti-Mage",
+   "aliases": [
+    "敌法",
+    "AM",
+    "小敌"
+   ]
+  },
+  {
+   "id": 2,
+   "key": "npc_dota_hero_axe",
+   "name_zh": "斧王",
+   "name_en": "Axe",
+   "aliases": [
+    "斧子"
+   ]
+  },
+  {
+   "id": 3,
+   "key": "npc_dota_hero_bane",
+   "name_zh": "祸乱之源",
+   "name_en": "Bane",
+   "aliases": [
+    "祸乱",
+    "痛苦之源",
+    "Bane"
+   ]
+  },
+  {
+   "id": 4,
+   "key": "npc_dota_hero_bloodseeker",
+   "name_zh": "血魔",
+   "name_en": "Bloodseeker",
+   "aliases": [
+    "BS"
+   ]
+  },
+  {
+   "id": 5,
+   "key": "npc_dota_hero_crystal_maiden",
+   "name_zh": "水晶室女",
+   "name_en": "Crystal Maiden",
+   "aliases": [
+    "冰女",
+    "CM"
+   ]
+  },
+  {
+   "id": 6,
+   "key": "npc_dota_hero_drow_ranger",
+   "name_zh": "卓尔游侠",
+   "name_en": "Drow Ranger",
+   "aliases": [
+    "小黑",
+    "黑弓"
+   ]
+  },
+  {
+   "id": 7,
+   "key": "npc_dota_hero_earthshaker",
+   "name_zh": "撼地者",
+   "name_en": "Earthshaker",
+   "aliases": [
+    "小牛",
+    "ES",
+    "撼地神牛"
+   ]
+  },
+  {
+   "id": 8,
+   "key": "npc_dota_hero_juggernaut",
+   "name_zh": "主宰",
+   "name_en": "Juggernaut",
+   "aliases": [
+    "剑圣",
+    "奶棒人"
+   ]
+  },
+  {
+   "id": 9,
+   "key": "npc_dota_hero_mirana",
+   "name_zh": "米拉娜",
+   "name_en": "Mirana",
+   "aliases": [
+    "白虎",
+    "POM"
+   ]
+  },
+  {
+   "id": 11,
+   "key": "npc_dota_hero_nevermore",
+   "name_zh": "影魔",
+   "name_en": "Shadow Fiend",
+   "aliases": [
+    "SF",
+    "大鸟"
+   ]
+  },
+  {
+   "id": 10,
+   "key": "npc_dota_hero_morphling",
+   "name_zh": "变体精灵",
+   "name_en": "Morphling",
+   "aliases": [
+    "水人",
+    "变体"
+   ]
+  },
+  {
+   "id": 12,
+   "key": "npc_dota_hero_phantom_lancer",
+   "name_zh": "幻影长矛手",
+   "name_en": "Phantom Lancer",
+   "aliases": [
+    "猴子",
+    "PL"
+   ]
+  },
+  {
+   "id": 13,
+   "key": "npc_dota_hero_puck",
+   "name_zh": "帕克",
+   "name_en": "Puck",
+   "aliases": [
+    "精灵龙"
+   ]
+  },
+  {
+   "id": 14,
+   "key": "npc_dota_hero_pudge",
+   "name_zh": "帕吉",
+   "name_en": "Pudge",
+   "aliases": [
+    "屠夫",
+    "胖子"
+   ]
+  },
+  {
+   "id": 15,
+   "key": "npc_dota_hero_razor",
+   "name_zh": "雷泽",
+   "name_en": "Razor",
+   "aliases": [
+    "电魂",
+    "闪电幽魂"
+   ]
+  },
+  {
+   "id": 16,
+   "key": "npc_dota_hero_sand_king",
+   "name_zh": "沙王",
+   "name_en": "Sand King",
+   "aliases": [
+    "SK"
+   ]
+  },
+  {
+   "id": 17,
+   "key": "npc_dota_hero_storm_spirit",
+   "name_zh": "风暴之灵",
+   "name_en": "Storm Spirit",
+   "aliases": [
+    "蓝猫",
+    "风暴"
+   ]
+  },
+  {
+   "id": 18,
+   "key": "npc_dota_hero_sven",
+   "name_zh": "斯温",
+   "name_en": "Sven",
+   "aliases": [
+    "流浪剑客",
+    "流浪"
+   ]
+  },
+  {
+   "id": 19,
+   "key": "npc_dota_hero_tiny",
+   "name_zh": "小小",
+   "name_en": "Tiny",
+   "aliases": [
+    "山岭"
+   ]
+  },
+  {
+   "id": 20,
+   "key": "npc_dota_hero_vengefulspirit",
+   "name_zh": "复仇之魂",
+   "name_en": "Vengeful Spirit",
+   "aliases": [
+    "VS",
+    "复仇"
+   ]
+  },
+  {
+   "id": 21,
+   "key": "npc_dota_hero_windrunner",
+   "name_zh": "风行者",
+   "name_en": "Windranger",
+   "aliases": [
+    "风行",
+    "WR"
+   ]
+  },
+  {
+   "id": 22,
+   "key": "npc_dota_hero_zuus",
+   "name_zh": "宙斯",
+   "name_en": "Zeus",
+   "aliases": [
+    "雷神"
+   ]
+  },
+  {
+   "id": 23,
+   "key": "npc_dota_hero_kunkka",
+   "name_zh": "昆卡",
+   "name_en": "Kunkka",
+   "aliases": [
+    "船长"
+   ]
+  },
+  {
+   "id": 25,
+   "key": "npc_dota_hero_lina",
+   "name_zh": "莉娜",
+   "name_en": "Lina",
+   "aliases": [
+    "火女"
+   ]
+  },
+  {
+   "id": 31,
+   "key": "npc_dota_hero_lich",
+   "name_zh": "巫妖",
+   "name_en": "Lich",
+   "aliases": []
+  },
+  {
+   "id": 26,
+   "key": "npc_dota_hero_lion",
+   "name_zh": "莱恩",
+   "name_en": "Lion",
+   "aliases": [
+    "恶魔巫师",
+    "Lion"
+   ]
+  },
+  {
+   "id": 27,
+   "key": "npc_dota_hero_shadow_shaman",
+   "name_zh": "暗影萨满",
+   "name_en": "Shadow Shaman",
+   "aliases": [
+    "小Y",
+    "萨满"
+   ]
+  },
+  {
+   "id": 28,
+   "key": "npc_dota_hero_slardar",
+   "name_zh": "斯拉达",
+   "name_en": "Slardar",
+   "aliases": [
+    "大鱼",
+    "鱼人守卫"
+   ]
+  },
+  {
+   "id": 29,
+   "key": "npc_dota_hero_tidehunter",
+   "name_zh": "潮汐猎人",
+   "name_en": "Tidehunter",
+   "aliases": [
+    "潮汐",
+    "西瓜皮"
+   ]
+  },
+  {
+   "id": 30,
+   "key": "npc_dota_hero_witch_doctor",
+   "name_zh": "巫医",
+   "name_en": "Witch Doctor",
+   "aliases": [
+    "WD"
+   ]
+  },
+  {
+   "id": 32,
+   "key": "npc_dota_hero_riki",
+   "name_zh": "力丸",
+   "name_en": "Riki",
+   "aliases": [
+    "隐形刺客",
+    "SA"
+   ]
+  },
+  {
+   "id": 33,
+   "key": "npc_dota_hero_enigma",
+   "name_zh": "谜团",
+   "name_en": "Enigma",
+   "aliases": [
+    "黑洞"
+   ]
+  },
+  {
+   "id": 34,
+   "key": "npc_dota_hero_tinker",
+   "name_zh": "修补匠",
+   "name_en": "Tinker",
+   "aliases": [
+    "TK",
+    "地精修补匠"
+   ]
+  },
+  {
+   "id": 35,
+   "key": "npc_dota_hero_sniper",
+   "name_zh": "狙击手",
+   "name_en": "Sniper",
+   "aliases": [
+    "火枪",
+    "狙击",
+    "矮人火枪手"
+   ]
+  },
+  {
+   "id": 36,
+   "key": "npc_dota_hero_necrolyte",
+   "name_zh": "瘟疫法师",
+   "name_en": "Necrophos",
+   "aliases": [
+    "死灵法",
+    "NEC"
+   ]
+  },
+  {
+   "id": 37,
+   "key": "npc_dota_hero_warlock",
+   "name_zh": "术士",
+   "name_en": "Warlock",
+   "aliases": [
+    "术士大叔"
+   ]
+  },
+  {
+   "id": 38,
+   "key": "npc_dota_hero_beastmaster",
+   "name_zh": "兽王",
+   "name_en": "Beastmaster",
+   "aliases": [
+    "BM"
+   ]
+  },
+  {
+   "id": 39,
+   "key": "npc_dota_hero_queenofpain",
+   "name_zh": "痛苦女王",
+   "name_en": "Queen of Pain",
+   "aliases": [
+    "女王",
+    "QOP"
+   ]
+  },
+  {
+   "id": 40,
+   "key": "npc_dota_hero_venomancer",
+   "name_zh": "剧毒术士",
+   "name_en": "Venomancer",
+   "aliases": [
+    "剧毒"
+   ]
+  },
+  {
+   "id": 41,
+   "key": "npc_dota_hero_faceless_void",
+   "name_zh": "虚空假面",
+   "name_en": "Faceless Void",
+   "aliases": [
+    "虚空",
+    "JB脸",
+    "FV"
+   ]
+  },
+  {
+   "id": 42,
+   "key": "npc_dota_hero_skeleton_king",
+   "name_zh": "冥魂大帝",
+   "name_en": "Wraith King",
+   "aliases": [
+    "骷髅王",
+    "SNK",
+    "冥魂"
+   ]
+  },
+  {
+   "id": 43,
+   "key": "npc_dota_hero_death_prophet",
+   "name_zh": "死亡先知",
+   "name_en": "Death Prophet",
+   "aliases": [
+    "DP"
+   ]
+  },
+  {
+   "id": 44,
+   "key": "npc_dota_hero_phantom_assassin",
+   "name_zh": "幻影刺客",
+   "name_en": "Phantom Assassin",
+   "aliases": [
+    "PA"
+   ]
+  },
+  {
+   "id": 45,
+   "key": "npc_dota_hero_pugna",
+   "name_zh": "帕格纳",
+   "name_en": "Pugna",
+   "aliases": [
+    "骨法"
+   ]
+  },
+  {
+   "id": 46,
+   "key": "npc_dota_hero_templar_assassin",
+   "name_zh": "圣堂刺客",
+   "name_en": "Templar Assassin",
+   "aliases": [
+    "TA",
+    "圣堂"
+   ]
+  },
+  {
+   "id": 47,
+   "key": "npc_dota_hero_viper",
+   "name_zh": "冥界亚龙",
+   "name_en": "Viper",
+   "aliases": [
+    "毒龙"
+   ]
+  },
+  {
+   "id": 48,
+   "key": "npc_dota_hero_luna",
+   "name_zh": "露娜",
+   "name_en": "Luna",
+   "aliases": [
+    "月骑",
+    "月之骑士"
+   ]
+  },
+  {
+   "id": 49,
+   "key": "npc_dota_hero_dragon_knight",
+   "name_zh": "龙骑士",
+   "name_en": "Dragon Knight",
+   "aliases": [
+    "龙骑",
+    "DK"
+   ]
+  },
+  {
+   "id": 50,
+   "key": "npc_dota_hero_dazzle",
+   "name_zh": "戴泽",
+   "name_en": "Dazzle",
+   "aliases": [
+    "暗影牧师",
+    "DAZ"
+   ]
+  },
+  {
+   "id": 51,
+   "key": "npc_dota_hero_rattletrap",
+   "name_zh": "发条技师",
+   "name_en": "Clockwerk",
+   "aliases": [
+    "发条"
+   ]
+  },
+  {
+   "id": 52,
+   "key": "npc_dota_hero_leshrac",
+   "name_zh": "拉席克",
+   "name_en": "Leshrac",
+   "aliases": [
+    "老鹿",
+    "受折磨的灵魂"
+   ]
+  },
+  {
+   "id": 53,
+   "key": "npc_dota_hero_furion",
+   "name_zh": "自然先知",
+   "name_en": "Nature's Prophet",
+   "aliases": [
+    "先知",
+    "FUR"
+   ]
+  },
+  {
+   "id": 54,
+   "key": "npc_dota_hero_life_stealer",
+   "name_zh": "噬魂鬼",
+   "name_en": "Lifestealer",
+   "aliases": [
+    "小狗"
+   ]
+  },
+  {
+   "id": 55,
+   "key": "npc_dota_hero_dark_seer",
+   "name_zh": "黑暗贤者",
+   "name_en": "Dark Seer",
+   "aliases": [
+    "兔子"
+   ]
+  },
+  {
+   "id": 56,
+   "key": "npc_dota_hero_clinkz",
+   "name_zh": "克林克兹",
+   "name_en": "Clinkz",
+   "aliases": [
+    "小骷髅",
+    "骨弓"
+   ]
+  },
+  {
+   "id": 57,
+   "key": "npc_dota_hero_omniknight",
+   "name_zh": "全能骑士",
+   "name_en": "Omniknight",
+   "aliases": [
+    "全能"
+   ]
+  },
+  {
+   "id": 58,
+   "key": "npc_dota_hero_enchantress",
+   "name_zh": "魅惑魔女",
+   "name_en": "Enchantress",
+   "aliases": [
+    "小鹿"
+   ]
+  },
+  {
+   "id": 59,
+   "key": "npc_dota_hero_huskar",
+   "name_zh": "哈斯卡",
+   "name_en": "Huskar",
+   "aliases": [
+    "神灵",
+    "神灵武士"
+   ]
+  },
+  {
+   "id": 60,
+   "key": "npc_dota_hero_night_stalker",
+   "name_zh": "暗夜魔王",
+   "name_en": "Night Stalker",
+   "aliases": [
+    "夜魔"
+   ]
+  },
+  {
+   "id": 61,
+   "key": "npc_dota_hero_broodmother",
+   "name_zh": "育母蜘蛛",
+   "name_en": "Broodmother",
+   "aliases": [
+    "蜘蛛",
+    "育母"
+   ]
+  },
+  {
+   "id": 62,
+   "key": "npc_dota_hero_bounty_hunter",
+   "name_zh": "赏金猎人",
+   "name_en": "Bounty Hunter",
+   "aliases": [
+    "赏金",
+    "BH"
+   ]
+  },
+  {
+   "id": 63,
+   "key": "npc_dota_hero_weaver",
+   "name_zh": "编织者",
+   "name_en": "Weaver",
+   "aliases": [
+    "蚂蚁"
+   ]
+  },
+  {
+   "id": 64,
+   "key": "npc_dota_hero_jakiro",
+   "name_zh": "杰奇洛",
+   "name_en": "Jakiro",
+   "aliases": [
+    "双头龙"
+   ]
+  },
+  {
+   "id": 65,
+   "key": "npc_dota_hero_batrider",
+   "name_zh": "蝙蝠骑士",
+   "name_en": "Batrider",
+   "aliases": [
+    "蝙蝠"
+   ]
+  },
+  {
+   "id": 66,
+   "key": "npc_dota_hero_chen",
+   "name_zh": "陈",
+   "name_en": "Chen",
+   "aliases": [
+    "圣骑士"
+   ]
+  },
+  {
+   "id": 67,
+   "key": "npc_dota_hero_spectre",
+   "name_zh": "幽鬼",
+   "name_en": "Spectre",
+   "aliases": [
+    "UG"
+   ]
+  },
+  {
+   "id": 69,
+   "key": "npc_dota_hero_doom_bringer",
+   "name_zh": "末日使者",
+   "name_en": "Doom",
+   "aliases": [
+    "末日",
+    "Doom"
+   ]
+  },
+  {
+   "id": 68,
+   "key": "npc_dota_hero_ancient_apparition",
+   "name_zh": "远古冰魄",
+   "name_en": "Ancient Apparition",
+   "aliases": [
+    "冰魂",
+    "AA"
+   ]
+  },
+  {
+   "id": 70,
+   "key": "npc_dota_hero_ursa",
+   "name_zh": "熊战士",
+   "name_en": "Ursa",
+   "aliases": [
+    "拍拍",
+    "拍拍熊"
+   ]
+  },
+  {
+   "id": 71,
+   "key": "npc_dota_hero_spirit_breaker",
+   "name_zh": "裂魂人",
+   "name_en": "Spirit Breaker",
+   "aliases": [
+    "白牛",
+    "SB"
+   ]
+  },
+  {
+   "id": 72,
+   "key": "npc_dota_hero_gyrocopter",
+   "name_zh": "矮人直升机",
+   "name_en": "Gyrocopter",
+   "aliases": [
+    "飞机"
+   ]
+  },
+  {
+   "id": 73,
+   "key": "npc_dota_hero_alchemist",
+   "name_zh": "炼金术士",
+   "name_en": "Alchemist",
+   "aliases": [
+    "炼金",
+    "GA"
+   ]
+  },
+  {
+   "id": 74,
+   "key": "npc_dota_hero_invoker",
+   "name_zh": "祈求者",
+   "name_en": "Invoker",
+   "aliases": [
+    "卡尔"
+   ]
+  },
+  {
+   "id": 75,
+   "key": "npc_dota_hero_silencer",
+   "name_zh": "沉默术士",
+   "name_en": "Silencer",
+   "aliases": [
+    "沉默"
+   ]
+  },
+  {
+   "id": 76,
+   "key": "npc_dota_hero_obsidian_destroyer",
+   "name_zh": "殁境神蚀者",
+   "name_en": "Outworld Destroyer",
+   "aliases": [
+    "黑鸟",
+    "殁境",
+    "OD"
+   ]
+  },
+  {
+   "id": 77,
+   "key": "npc_dota_hero_lycan",
+   "name_zh": "狼人",
+   "name_en": "Lycan",
+   "aliases": []
+  },
+  {
+   "id": 78,
+   "key": "npc_dota_hero_brewmaster",
+   "name_zh": "酒仙",
+   "name_en": "Brewmaster",
+   "aliases": [
+    "熊猫"
+   ]
+  },
+  {
+   "id": 79,
+   "key": "npc_dota_hero_shadow_demon",
+   "name_zh": "暗影恶魔",
+   "name_en": "Shadow Demon",
+   "aliases": [
+    "毒狗",
+    "SD"
+   ]
+  },
+  {
+   "id": 80,
+   "key": "npc_dota_hero_lone_druid",
+   "name_zh": "独行德鲁伊",
+   "name_en": "Lone Druid",
+   "aliases": [
+    "德鲁伊",
+    "熊德",
+    "LD"
+   ]
+  },
+  {
+   "id": 81,
+   "key": "npc_dota_hero_chaos_knight",
+   "name_zh": "混沌骑士",
+   "name_en": "Chaos Knight",
+   "aliases": [
+    "混沌",
+    "CK"
+   ]
+  },
+  {
+   "id": 82,
+   "key": "npc_dota_hero_meepo",
+   "name_zh": "米波",
+   "name_en": "Meepo",
+   "aliases": [
+    "狗头人"
+   ]
+  },
+  {
+   "id": 83,
+   "key": "npc_dota_hero_treant",
+   "name_zh": "树精卫士",
+   "name_en": "Treant Protector",
+   "aliases": [
+    "大树",
+    "树精"
+   ]
+  },
+  {
+   "id": 84,
+   "key": "npc_dota_hero_ogre_magi",
+   "name_zh": "食人魔魔法师",
+   "name_en": "Ogre Magi",
+   "aliases": [
+    "蓝胖",
+    "食人魔"
+   ]
+  },
+  {
+   "id": 85,
+   "key": "npc_dota_hero_undying",
+   "name_zh": "不朽尸王",
+   "name_en": "Undying",
+   "aliases": [
+    "尸王"
+   ]
+  },
+  {
+   "id": 86,
+   "key": "npc_dota_hero_rubick",
+   "name_zh": "拉比克",
+   "name_en": "Rubick",
+   "aliases": [
+    "大魔导师"
+   ]
+  },
+  {
+   "id": 87,
+   "key": "npc_dota_hero_disruptor",
+   "name_zh": "干扰者",
+   "name_en": "Disruptor",
+   "aliases": [
+    "萨尔",
+    "风暴之眼"
+   ]
+  },
+  {
+   "id": 88,
+   "key": "npc_dota_hero_nyx_assassin",
+   "name_zh": "司夜刺客",
+   "name_en": "Nyx Assassin",
+   "aliases": [
+    "小强",
+    "司夜"
+   ]
+  },
+  {
+   "id": 89,
+   "key": "npc_dota_hero_naga_siren",
+   "name_zh": "娜迦海妖",
+   "name_en": "Naga Siren",
+   "aliases": [
+    "小娜迦",
+    "娜迦"
+   ]
+  },
+  {
+   "id": 90,
+   "key": "npc_dota_hero_keeper_of_the_light",
+   "name_zh": "光之守卫",
+   "name_en": "Keeper of the Light",
+   "aliases": [
+    "光法",
+    "KOTL"
+   ]
+  },
+  {
+   "id": 91,
+   "key": "npc_dota_hero_wisp",
+   "name_zh": "艾欧",
+   "name_en": "Io",
+   "aliases": [
+    "小精灵",
+    "IO"
+   ]
+  },
+  {
+   "id": 92,
+   "key": "npc_dota_hero_visage",
+   "name_zh": "维萨吉",
+   "name_en": "Visage",
+   "aliases": [
+    "死灵龙"
+   ]
+  },
+  {
+   "id": 93,
+   "key": "npc_dota_hero_slark",
+   "name_zh": "斯拉克",
+   "name_en": "Slark",
+   "aliases": [
+    "小鱼"
+   ]
+  },
+  {
+   "id": 94,
+   "key": "npc_dota_hero_medusa",
+   "name_zh": "美杜莎",
+   "name_en": "Medusa",
+   "aliases": [
+    "一姐",
+    "大娜迦"
+   ]
+  },
+  {
+   "id": 95,
+   "key": "npc_dota_hero_troll_warlord",
+   "name_zh": "巨魔战将",
+   "name_en": "Troll Warlord",
+   "aliases": [
+    "巨魔"
+   ]
+  },
+  {
+   "id": 96,
+   "key": "npc_dota_hero_centaur",
+   "name_zh": "半人马战行者",
+   "name_en": "Centaur Warrunner",
+   "aliases": [
+    "人马",
+    "半人马"
+   ]
+  },
+  {
+   "id": 97,
+   "key": "npc_dota_hero_magnataur",
+   "name_zh": "马格纳斯",
+   "name_en": "Magnus",
+   "aliases": [
+    "猛犸"
+   ]
+  },
+  {
+   "id": 98,
+   "key": "npc_dota_hero_shredder",
+   "name_zh": "伐木机",
+   "name_en": "Timbersaw",
+   "aliases": [
+    "花母鸡"
+   ]
+  },
+  {
+   "id": 99,
+   "key": "npc_dota_hero_bristleback",
+   "name_zh": "钢背兽",
+   "name_en": "Bristleback",
+   "aliases": [
+    "钢背",
+    "刚背"
+   ]
+  },
+  {
+   "id": 100,
+   "key": "npc_dota_hero_tusk",
+   "name_zh": "巨牙海民",
+   "name_en": "Tusk",
+   "aliases": [
+    "海民",
+    "巨牙"
+   ]
+  },
+  {
+   "id": 101,
+   "key": "npc_dota_hero_skywrath_mage",
+   "name_zh": "天怒法师",
+   "name_en": "Skywrath Mage",
+   "aliases": [
+    "天怒"
+   ]
+  },
+  {
+   "id": 102,
+   "key": "npc_dota_hero_abaddon",
+   "name_zh": "亚巴顿",
+   "name_en": "Abaddon",
+   "aliases": [
+    "死骑",
+    "LOA"
+   ]
+  },
+  {
+   "id": 103,
+   "key": "npc_dota_hero_elder_titan",
+   "name_zh": "上古巨神",
+   "name_en": "Elder Titan",
+   "aliases": [
+    "大牛",
+    "ET"
+   ]
+  },
+  {
+   "id": 104,
+   "key": "npc_dota_hero_legion_commander",
+   "name_zh": "军团指挥官",
+   "name_en": "Legion Commander",
+   "aliases": [
+    "军团",
+    "LC"
+   ]
+  },
+  {
+   "id": 106,
+   "key": "npc_dota_hero_ember_spirit",
+   "name_zh": "灰烬之灵",
+   "name_en": "Ember Spirit",
+   "aliases": [
+    "火猫",
+    "灰烬"
+   ]
+  },
+  {
+   "id": 107,
+   "key": "npc_dota_hero_earth_spirit",
+   "name_zh": "大地之灵",
+   "name_en": "Earth Spirit",
+   "aliases": [
+    "土猫"
+   ]
+  },
+  {
+   "id": 109,
+   "key": "npc_dota_hero_terrorblade",
+   "name_zh": "恐怖利刃",
+   "name_en": "Terrorblade",
+   "aliases": [
+    "TB"
+   ]
+  },
+  {
+   "id": 110,
+   "key": "npc_dota_hero_phoenix",
+   "name_zh": "凤凰",
+   "name_en": "Phoenix",
+   "aliases": []
+  },
+  {
+   "id": 111,
+   "key": "npc_dota_hero_oracle",
+   "name_zh": "神谕者",
+   "name_en": "Oracle",
+   "aliases": [
+    "神谕"
+   ]
+  },
+  {
+   "id": 105,
+   "key": "npc_dota_hero_techies",
+   "name_zh": "工程师",
+   "name_en": "Techies",
+   "aliases": [
+    "炸弹人"
+   ]
+  },
+  {
+   "id": 112,
+   "key": "npc_dota_hero_winter_wyvern",
+   "name_zh": "寒冬飞龙",
+   "name_en": "Winter Wyvern",
+   "aliases": [
+    "冰龙"
+   ]
+  },
+  {
+   "id": 113,
+   "key": "npc_dota_hero_arc_warden",
+   "name_zh": "天穹守望者",
+   "name_en": "Arc Warden",
+   "aliases": [
+    "电狗"
+   ]
+  },
+  {
+   "id": 108,
+   "key": "npc_dota_hero_abyssal_underlord",
+   "name_zh": "孽主",
+   "name_en": "Underlord",
+   "aliases": [
+    "大屁股",
+    "地狱领主"
+   ]
+  },
+  {
+   "id": 114,
+   "key": "npc_dota_hero_monkey_king",
+   "name_zh": "齐天大圣",
+   "name_en": "Monkey King",
+   "aliases": [
+    "大圣",
+    "MK"
+   ]
+  },
+  {
+   "id": 120,
+   "key": "npc_dota_hero_pangolier",
+   "name_zh": "石鳞剑士",
+   "name_en": "Pangolier",
+   "aliases": [
+    "滚滚"
+   ]
+  },
+  {
+   "id": 119,
+   "key": "npc_dota_hero_dark_willow",
+   "name_zh": "邪影芳灵",
+   "name_en": "Dark Willow",
+   "aliases": [
+    "小仙女"
+   ]
+  },
+  {
+   "id": 121,
+   "key": "npc_dota_hero_grimstroke",
+   "name_zh": "天涯墨客",
+   "name_en": "Grimstroke",
+   "aliases": [
+    "墨客"
+   ]
+  },
+  {
+   "id": 129,
+   "key": "npc_dota_hero_mars",
+   "name_zh": "玛尔斯",
+   "name_en": "Mars",
+   "aliases": [
+    "马尔斯"
+   ]
+  },
+  {
+   "id": 126,
+   "key": "npc_dota_hero_void_spirit",
+   "name_zh": "虚无之灵",
+   "name_en": "Void Spirit",
+   "aliases": [
+    "紫猫"
+   ]
+  },
+  {
+   "id": 128,
+   "key": "npc_dota_hero_snapfire",
+   "name_zh": "电炎绝手",
+   "name_en": "Snapfire",
+   "aliases": [
+    "奶奶",
+    "老奶奶"
+   ]
+  },
+  {
+   "id": 123,
+   "key": "npc_dota_hero_hoodwink",
+   "name_zh": "森海飞霞",
+   "name_en": "Hoodwink",
+   "aliases": [
+    "松鼠"
+   ]
+  },
+  {
+   "id": 135,
+   "key": "npc_dota_hero_dawnbreaker",
+   "name_zh": "破晓辰星",
+   "name_en": "Dawnbreaker",
+   "aliases": [
+    "锤妹"
+   ]
+  },
+  {
+   "id": 136,
+   "key": "npc_dota_hero_marci",
+   "name_zh": "玛西",
+   "name_en": "Marci",
+   "aliases": []
+  },
+  {
+   "id": 137,
+   "key": "npc_dota_hero_primal_beast",
+   "name_zh": "獸",
+   "name_en": "Primal Beast",
+   "aliases": [
+    "兽",
+    "大兽"
+   ]
+  },
+  {
+   "id": 138,
+   "key": "npc_dota_hero_muerta",
+   "name_zh": "琼英碧灵",
+   "name_en": "Muerta",
+   "aliases": [
+    "琼英"
+   ]
+  },
+  {
+   "id": 131,
+   "key": "npc_dota_hero_ringmaster",
+   "name_zh": "百戏大王",
+   "name_en": "Ringmaster",
+   "aliases": [
+    "百戏"
+   ]
+  },
+  {
+   "id": 145,
+   "key": "npc_dota_hero_kez",
+   "name_zh": "凯",
+   "name_en": "Kez",
+   "aliases": []
+  },
+  {
+   "id": 155,
+   "key": "npc_dota_hero_largo",
+   "name_zh": "朗戈",
+   "name_en": "Largo",
+   "aliases": []
+  }
+ ],
+ "note": "别名匹配请做精确匹配或前缀匹配，不要子串匹配（如\"兽\"会命中\"兽王\"）。新英雄（凯、朗戈）暂无公认外号。"
+}
