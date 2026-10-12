@@ -26,14 +26,18 @@ function render(s) {
   $('#alert').hidden = !urgent; $('#soft').hidden = !soft;
   if (urgent) {
     $('#alert-t').textContent = al.text;
-    const left = Math.max(0, 8 - (Date.now() / 1000 - al.at));
-    $('#ring-n').textContent = Math.ceil(left);
-    $('#ring').setAttribute('stroke-dashoffset', (125.6 * (1 - left / 8)).toFixed(1));
-    $('#alert-s').textContent = '强时效提醒 · 8 秒后收起';
+    // Ring shows the objective countdown (e.g. Roshan), not the banner's own timeout
+    const tgt = (s.timers || []).find(x => x.hot) || null;
+    if (tgt) {
+      $('#ring-n').textContent = tgt.remain;
+      $('#ring').setAttribute('stroke-dashoffset', (125.6 * (1 - Math.min(tgt.remain, 30) / 30)).toFixed(1));
+      $('#alert-s').textContent = `${tgt.name.replace(/^肉山/, '')}还有 ${tgt.remain} 秒`;
+    } else { $('#ring-n').textContent = '!'; $('#ring').setAttribute('stroke-dashoffset', '0'); $('#alert-s').textContent = ''; }
     if (al.at !== lastAlertAt) { lastAlertAt = al.at; ov.classList.remove('hot'); void ov.offsetWidth; ov.classList.add('hot'); }
   } else ov.classList.remove('hot');
   if (soft) $('#soft-t').textContent = al.text;
-  const ts = (s.timers || []).slice(0, urgent ? 1 : 2);
+  const hotKey = urgent ? ((s.timers || []).find(x => x.hot) || {}).key : null;
+  const ts = (s.timers || []).filter(x => x.key !== hotKey).slice(0, urgent ? 1 : 2);
   $('#timers').innerHTML = ts.map(timerRow).join('');
   document.querySelectorAll('[data-item]').forEach(el => setIcon(el, 'items', el.dataset.item, '盾'));
   $('#pnext').innerHTML = ts[0] ? `${esc(ts[0].name.slice(0, 2))} <b class="num" style="color:var(--info);font-size:15px">${mmss(ts[0].remain)}</b>` : '';
@@ -58,5 +62,14 @@ onReady(() => {
   $('#exp').onclick = () => api().toggle_compact();
   $('#hd').addEventListener('dblclick', () => api().toggle_compact());
   $('#pill').addEventListener('dblclick', () => api().toggle_compact());
-  poll(render, 500);
+  poll(s => { render(s); fit(); }, 500);
 });
+
+// Window follows content: 12px transparent margin on every side for the shadow
+let lastSize = '';
+function fit() {
+  const el = $('#ov').hidden ? $('#pill') : $('#ov');
+  const r = el.getBoundingClientRect();
+  const w = Math.ceil(r.width) + 24, h = Math.ceil(r.height) + 24, k = `${w}x${h}`;
+  if (k !== lastSize && r.height > 0) { lastSize = k; api().fit_overlay(w, h); }
+}

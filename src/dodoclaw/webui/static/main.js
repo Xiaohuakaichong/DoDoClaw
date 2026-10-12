@@ -3,14 +3,13 @@ let lastHero = '';
 function chip(el, cls, text) { el.innerHTML = `<span class="dot ${cls}"></span>${esc(text)}`; }
 function render(s) {
   applyMotion(s);
-  $('#rm').checked = !!s.reduce_motion;
+  $('#rm').classList.toggle('on', !!s.reduce_motion);
   // top chips + status cards
   const g = s.gsi;
   chip($('#chip-gsi'), g.online ? 'ok' : 'warn', g.online ? 'Dota 已连接' : '等待 Dota');
   chip($('#chip-coach'), s.coach.key_ok ? 'ok' : 'err', s.coach.key_ok ? `教练 · ${s.coach.provider}` : '教练未设置 Key');
   $('#chip-voice span').textContent = `播报 · ${s.voice.tts}`;
   $('#gsi-addr').textContent = g.addr;
-  $('#hero-pkts').textContent = `${g.updates} 包`;
   $('#st-gsi-d').textContent = g.age == null ? `还没收到数据 · 监听 ${g.addr}` : `上次推送 ${g.age} 秒前`;
   $('#st-gsi-r').textContent = g.online ? '正常' : '等待'; $('#st-gsi-r').style.color = g.online ? 'var(--ok)' : 'var(--warn)';
   $('#st-gsi .ic').style.color = g.online ? 'var(--ok)' : 'var(--warn)';
@@ -43,7 +42,7 @@ function render(s) {
   const box = $('#cur-items'); const want = s.items.join(',');
   if (box.dataset.k !== want) {
     box.dataset.k = want; box.innerHTML = '';
-    s.items.forEach(n => { const d = document.createElement('div'); d.className = 'it'; box.appendChild(d); setIcon(d, 'items', n, n.replace('item_', '')); });
+    s.items.forEach((n, i) => { const d = document.createElement('div'); d.className = 'it'; box.appendChild(d); setIcon(d, 'items', n, (s.items_zh || [])[i] || '物品'); });
   }
   $('#cur-kda').textContent = s.kda.join('/');
   $('#cur-gold').textContent = s.gold;
@@ -71,6 +70,6 @@ onReady(() => {
   $('#btn-min').onclick = () => api().minimize();
   $('#btn-close').onclick = () => api().close();
   $('#btn-ov').onclick = () => api().toggle_overlay();
-  $('#rm').onchange = e => api().set_reduce_motion(e.target.checked);
+  $('#rm').onclick = () => api().set_reduce_motion(!$('#rm').classList.contains('on'));
   poll(render, 1000);
 });

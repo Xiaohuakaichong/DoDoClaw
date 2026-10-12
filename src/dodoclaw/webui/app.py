@@ -17,12 +17,30 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 STATIC = Path(__file__).resolve().parent / "static"
-OV_W, OV_H, OV_COMPACT = 320, 300, (250, 44)
+OV_W, OV_H, OV_COMPACT = 344, 324, (274, 64)  # card + 12px shadow margin each side
 URGENT_KEYS = ("roshan", "aegis", "肉山", "盾")
 
 
 def _hero_key(name: str) -> str:
     return (name or "").replace("npc_dota_hero_", "")
+
+
+_ITEM_ZH: dict[str, str] | None = None
+
+
+def item_zh(key: str) -> str:
+    """Chinese item name from data/item_names_zh.json (Valve datafeed, schinese)."""
+    global _ITEM_ZH
+    if _ITEM_ZH is None:
+        import json
+
+        try:
+            path = Path(__file__).resolve().parents[1] / "data" / "item_names_zh.json"
+            _ITEM_ZH = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            _ITEM_ZH = {}
+    k = (key or "").removeprefix("item_")
+    return _ITEM_ZH.get(k, "物品")
 
 
 _HERO_ZH: dict[str, str] | None = None
@@ -132,6 +150,7 @@ class Bridge:
             "gold": snap.gold,
             "gpm": snap.gpm,
             "items": [x for x in items if x and x != "empty"],
+            "items_zh": [item_zh(x) for x in items if x and x != "empty"],
             "timers": self._timers.compute(snap.clock_time) if snap.in_game else [],
             "coach": {"provider": svc.provider_name, "model": svc.coach.model, "key_ok": key_ok},
             "voice": {"tts": svc.tts_backend, "stt": svc.stt_backend},
@@ -210,6 +229,10 @@ class Bridge:
         if self._ov_win:
             self._ov_win.show() if shown else self._ov_win.hide()
         return shown
+
+    def fit_overlay(self, w: int, h: int) -> None:
+        if self._ov_win is not None and 100 <= int(w) <= 800 and 40 <= int(h) <= 900:
+            self._ov_win.resize(int(w), int(h))
 
     def toggle_compact(self) -> bool:
         self.compact = not self.compact

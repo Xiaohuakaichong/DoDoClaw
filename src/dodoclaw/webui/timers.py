@@ -29,14 +29,26 @@ class Timer:
     note: str = ""
 
 
-def _ev_time(ev: dict[str, Any]) -> int | None:
-    for k in ("game_time", "clock_time", "time"):
-        if k in ev:
-            try:
-                return int(float(ev[k]))
-            except (TypeError, ValueError):
-                return None
-    return None
+def _num(v: Any) -> int | None:
+    try:
+        return int(float(v))
+    except (TypeError, ValueError):
+        return None
+
+
+def _ev_time(ev: dict[str, Any], offset: int | None, clock: int | None) -> int | None:
+    """Event time on the map.clock_time axis (what compute() compares against).
+
+    GSI events carry ``game_time`` (counts from load-in); clock_time starts at the
+    horn, so convert with offset = map.game_time - map.clock_time. Without an
+    offset, fall back to the current map.clock_time when the event arrives.
+    """
+    if "clock_time" in ev:
+        return _num(ev["clock_time"])
+    gt = _num(ev.get("game_time", ev.get("time")))
+    if gt is not None and offset is not None:
+        return gt - offset
+    return clock
 
 
 class MatchTimers:
@@ -55,6 +67,9 @@ class MatchTimers:
         mid = str(m.get("matchid") or "")
         if mid and mid != self.match_id:
             self._reset(mid)
+        clock = _num(m.get("clock_time"))
+        gtime = _num(m.get("game_time"))
+        offset = gtime - clock if gtime is not None and clock is not None else None
         events = raw.get("events") or []
         if isinstance(events, dict):
             events = list(events.values())
@@ -62,8 +77,8 @@ class MatchTimers:
             if not isinstance(ev, dict):
                 continue
             et = str(ev.get("event_type") or "")
-            t = _ev_time(ev)
-            sig = (et, t)
+            t = _ev_time(ev, offset, clock)
+            sig = (et, ev.get("game_time", t))
             if t is None or sig in self._seen:
                 continue
             self._seen.add(sig)

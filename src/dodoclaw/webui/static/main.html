@@ -99,6 +99,7 @@ html,body{height:100%;background:var(--bg-0);overflow:hidden;user-select:none}
 .lt .bar{height:3px;border-radius:2px;background:rgba(255,255,255,.07);margin-top:5px;overflow:hidden}.lt .bar i{display:block;height:100%;transform-origin:left;transition:transform 1s linear}
 .toggle{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-2);cursor:pointer}
 .proto{position:absolute;left:150px;top:14px;font-size:10px;color:var(--text-3);opacity:.7}
+.toggle .sw{position:relative;width:28px;height:16px;border-radius:8px;background:rgba(255,255,255,.12);transition:background 160ms var(--ease)}.toggle .sw::after{content:"";position:absolute;left:2px;top:2px;width:12px;height:12px;border-radius:50%;background:var(--text-3);transition:all 160ms var(--ease)}.toggle.on .sw{background:var(--brand-grad)}.toggle.on .sw::after{left:14px;background:#fff}
 </style></head><body>
 <svg width="0" height="0" style="position:absolute"><defs>
 <symbol id="home" viewBox="0 0 24 24"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/></symbol>
@@ -141,12 +142,12 @@ html,body{height:100%;background:var(--bg-0);overflow:hidden;user-select:none}
    <div class="in"><span class="label" id="hero-label">READY · 等待下一局</span>
     <h1 id="hero-h1">下一局，<em>我帮你盯着</em></h1>
     <p id="hero-p">进入对局后小窗会自动出现。打字或点麦克风都能提问。</p>
-    <div class="row"><span class="chip" id="hero-gsi"><span class="pulse"></span>GSI · <span id="gsi-addr">127.0.0.1:3000</span></span><span class="chip" id="hero-day" hidden></span><span class="chip" id="hero-pkts">0 包</span></div></div>
+    <div class="row"><span class="chip" id="hero-gsi"><span class="pulse"></span>GSI · <span id="gsi-addr">127.0.0.1:3000</span></span><span class="chip" id="hero-day" hidden></span></div></div>
   </section>
   <aside class="side">
    <div class="glass st" id="st-gsi"><div class="ic"><svg class="ico"><use href="#spark"/></svg></div><div><div class="t">连接 Dota</div><div class="d" id="st-gsi-d">还没收到数据</div></div><span class="r" id="st-gsi-r">等待</span></div>
    <div class="glass st" id="st-coach"><div class="ic"><svg class="ico"><use href="#chat"/></svg></div><div><div class="t">AI 教练</div><div class="d" id="st-coach-d">—</div></div><span class="r" id="st-coach-r">—</span></div>
-   <div class="glass st" id="st-voice"><div class="ic" style="color:var(--info)"><svg class="ico"><use href="#vol"/></svg></div><div><div class="t">语音播报</div><div class="d" id="st-voice-d">—</div></div><label class="r toggle"><input type="checkbox" id="rm"> 减少动效</label></div>
+   <div class="glass st" id="st-voice"><div class="ic" style="color:var(--info)"><svg class="ico"><use href="#vol"/></svg></div><div><div class="t">语音播报</div><div class="d" id="st-voice-d">—</div></div><span class="r toggle" id="rm" role="switch"><i class="sw"></i>减少动效</span></div>
    <div class="glass last">
     <div class="hd" style="margin:0"><h2 id="cur-title">本局</h2><span class="more" id="cur-clock">—</span></div>
     <div class="lm"><div class="por" id="cur-por">—</div><div><div style="font-weight:800" id="cur-hero">还没进对局</div><div class="items" id="cur-items" style="margin-top:6px"></div></div></div>
