@@ -150,6 +150,11 @@ class Bridge:
         self.compact = False
         self.overlay_forced: bool | None = None
         self._ov_shape = ""
+        # pywebview's WinForms resize()/move() use SWP_SHOWWINDOW, so touching a
+        # hidden overlay pops it up as an empty box: park size/pos until shown.
+        self._ov_shown = False
+        self._ov_pending_size: tuple[int, int] | None = None
+        self._ov_pending_pos: tuple[int, int] | None = None
         self.reduce_motion = False
         self._busy = False
         self._answer: dict[str, Any] = {}
@@ -549,20 +554,44 @@ class Bridge:
     def reset_overlay_pos(self) -> bool:
         if self._ov_win is None:
             return False
-        self._ov_win.move(*OV_POS)
+        if self._ov_shown:
+            self._ov_win.move(*OV_POS)
+        else:
+            self._ov_pending_pos = OV_POS
         return True
 
     def toggle_overlay(self) -> bool:
         shown = not (self.overlay_forced if self.overlay_forced is not None else False)
         self.overlay_forced = shown
-        if self._ov_win:
-            self._ov_win.show() if shown else self._ov_win.hide()
+        self._set_overlay_visible(shown)
         return shown
+
+    def _set_overlay_visible(self, want: bool) -> None:
+        if self._ov_win is None:
+            return
+        if not want:
+            self._ov_shown = False
+            self._ov_win.hide()
+            return
+        self._ov_win.show()
+        self._ov_shown = True
+        pos, self._ov_pending_pos = self._ov_pending_pos, None
+        size, self._ov_pending_size = self._ov_pending_size, None
+        if pos:
+            self._ov_win.move(*pos)
+        if size:
+            self._resize_overlay(*size)
+
+    def _resize_overlay(self, w: int, h: int) -> None:
+        if not self._ov_shown:
+            self._ov_pending_size = (w, h)
+            return
+        self._ov_win.resize(w, h)
+        self._shape_overlay()
 
     def fit_overlay(self, w: int, h: int) -> None:
         if self._ov_win is not None and 100 <= int(w) <= 800 and 40 <= int(h) <= 900:
-            self._ov_win.resize(int(w), int(h))
-            self._shape_overlay()
+            self._resize_overlay(int(w), int(h))
 
     def _shape_overlay(self) -> None:
         """Round the overlay's corners (Win11 DWM / Win10 window region). One-shot, not per frame."""
@@ -580,9 +609,7 @@ class Bridge:
     def toggle_compact(self) -> bool:
         self.compact = not self.compact
         if self._ov_win:
-            w, h = OV_COMPACT if self.compact else (OV_W, OV_H)
-            self._ov_win.resize(w, h)
-            self._shape_overlay()
+            self._resize_overlay(*(OV_COMPACT if self.compact else (OV_W, OV_H)))
         return self.compact
 
     def minimize(self) -> None:
@@ -604,17 +631,15 @@ class Bridge:
     # ── background loop ──────────────────────────────
     def _watch(self) -> None:
         """Auto show/hide overlay with the match; re-assert topmost every 2s."""
-        shown = False
         while True:
             time.sleep(2.0)
             try:
                 want = self._svc.snapshot().in_game and bool(self.ui.get("auto_overlay", True))
                 if self.overlay_forced is not None:
                     want = self.overlay_forced
-                if self._ov_win and want != shown:
-                    self._ov_win.show() if want else self._ov_win.hide()
-                    shown = want
-                if self._ov_win and shown:
+                if self._ov_win and want != self._ov_shown:
+                    self._set_overlay_visible(want)
+                if self._ov_win and self._ov_shown:
                     self._ov_win.on_top = True
             except Exception:
                 logger.debug("watch loop", exc_info=True)

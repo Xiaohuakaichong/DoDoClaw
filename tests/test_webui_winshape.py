@@ -94,8 +94,16 @@ def test_hwnd_of():
 def _bridge_with_window(monkeypatch, shape="dwm"):
     b = webapp.Bridge.__new__(webapp.Bridge)
     calls = []
-    b._ov_win = SimpleNamespace(resize=lambda w, h: calls.append(("resize", w, h)))
+    b._ov_win = SimpleNamespace(
+        resize=lambda w, h: calls.append(("resize", w, h)),
+        move=lambda x, y: calls.append(("move", x, y)),
+        show=lambda: calls.append(("show",)),
+        hide=lambda: calls.append(("hide",)),
+    )
     b._ov_shape = ""
+    b._ov_shown = True
+    b._ov_pending_size = b._ov_pending_pos = None
+    b.overlay_forced = None
     b.compact = False
     monkeypatch.setattr(winshape, "hwnd_of", lambda w: 99)
     monkeypatch.setattr(winshape, "round_corners", lambda h: calls.append(("shape", h)) or shape)
@@ -128,3 +136,20 @@ def test_overlay_page_has_no_outer_margin_or_shadow():
                     assert shadow.strip().startswith("inset"), line
     js = (webapp.STATIC / "overlay.js").read_text(encoding="utf-8")
     assert "+ 24" not in js
+
+
+def test_hidden_overlay_is_not_popped_up_by_resize_or_reset(monkeypatch):
+    # pywebview's WinForms resize/move use SWP_SHOWWINDOW: never call them while hidden
+    b, calls = _bridge_with_window(monkeypatch, "dwm")
+    b._ov_shown = False
+    b.fit_overlay(320, 106)
+    b.toggle_compact()
+    b.reset_overlay_pos()
+    assert calls == []
+    assert b.toggle_overlay() is True  # 小窗 chip: show, then apply parked pos + size
+    assert calls == [("show",), ("move", *webapp.OV_POS), ("resize", 250, 40), ("shape", 99)]
+    calls.clear()
+    assert b.toggle_overlay() is False
+    assert calls == [("hide",)]
+    b.fit_overlay(320, 300)
+    assert calls == [("hide",)] and b._ov_pending_size == (320, 300)
