@@ -191,8 +191,8 @@ PROVIDERS: dict[str, ProviderSpec] = {
     ),
 }
 
-# New-user default. An explicit LLM_PROVIDER in .env or coach.provider in
-# config/settings.yaml always wins over this.
+# New-user default. coach.provider in config/settings.yaml always wins over this;
+# LLM_PROVIDER in .env is ignored (PRD D9: .env only holds keys).
 DEFAULT_PROVIDER_ID = "deepseek"
 
 
@@ -256,7 +256,8 @@ def resolve_llm_runtime(
 ) -> tuple[ProviderSpec, str, str, str]:
     """
     Resolve (provider, api_key, base_url, model) from explicit values + env map.
-    env_get: optional dict (defaults to os.environ).
+    env_get: optional dict (defaults to os.environ); only key variables are read
+    from it — base URL / model come from the arguments or the provider defaults.
     """
     import os
 
@@ -281,6 +282,6 @@ def resolve_llm_runtime(
             if key:
                 break
 
-    url = (base_url or "").strip() or (env.get("LLM_BASE_URL") or "").strip() or spec.base_url
-    mdl = (model or "").strip() or (env.get("LLM_MODEL") or "").strip() or spec.default_model
+    url = (base_url or "").strip() or spec.base_url
+    mdl = (model or "").strip() or spec.default_model
     return spec, key, url.rstrip("/"), mdl

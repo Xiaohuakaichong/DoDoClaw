@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 from functools import lru_cache
 from pathlib import Path
@@ -16,6 +17,13 @@ from dodoclaw.providers import (
     resolve_llm_runtime,
 )
 
+logger = logging.getLogger(__name__)
+
+# PRD D9: provider / model / endpoint come only from config/settings.yaml (then the
+# code default). These .env variables are read only to log that they are ignored.
+IGNORED_ENV = ("LLM_PROVIDER", "LLM_MODEL", "LLM_BASE_URL", "XAI_MODEL", "XAI_BASE_URL")
+_ignored_logged = False
+
 
 def _env_file() -> str:
     return str(app_dir() / ".env")
@@ -28,8 +36,8 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    # Unified LLM settings
-    # Empty = fall back to coach.provider in settings.yaml, then DEFAULT_PROVIDER_ID
+    # Unified LLM settings. Only the key is used; provider / base URL / model in
+    # .env are ignored (coach.* in settings.yaml, then DEFAULT_PROVIDER_ID).
     llm_provider: str = Field(default="", alias="LLM_PROVIDER")
     llm_api_key: str = Field(default="", alias="LLM_API_KEY")
     llm_base_url: str = Field(default="", alias="LLM_BASE_URL")
@@ -48,7 +56,7 @@ class Settings(BaseSettings):
     baichuan_api_key: str = Field(default="", alias="BAICHUAN_API_KEY")
     openai_api_key: str = Field(default="", alias="OPENAI_API_KEY")
 
-    # Legacy xAI fields (still supported)
+    # Legacy xAI fields (key still supported; base URL / model ignored)
     xai_api_key: str = Field(default="", alias="XAI_API_KEY")
     xai_base_url: str = Field(default="", alias="XAI_BASE_URL")
     xai_model: str = Field(default="", alias="XAI_MODEL")
@@ -87,44 +95,52 @@ class Settings(BaseSettings):
         with path.open("r", encoding="utf-8") as f:
             return yaml.safe_load(f) or {}
 
+    def _note_ignored_env(self) -> None:
+        """One info line if .env still sets provider/model/endpoint (names only)."""
+        global _ignored_logged
+        if _ignored_logged:
+            return
+        values = {
+            "LLM_PROVIDER": self.llm_provider,
+            "LLM_MODEL": self.llm_model,
+            "LLM_BASE_URL": self.llm_base_url,
+            "XAI_MODEL": self.xai_model,
+            "XAI_BASE_URL": self.xai_base_url,
+        }
+        names = [k for k in IGNORED_ENV if (values.get(k) or "").strip()]
+        if names:
+            _ignored_logged = True
+            logger.info(
+                ".env 里的 %s 已忽略：服务商和模型只从 config\\settings.yaml 的 coach.provider / coach.model 读取",
+                ", ".join(names),
+            )
+
     def resolve_llm(self) -> tuple[str, str, str, str, str]:
         """
         Returns (provider_id, provider_name, api_key, base_url, model).
-        Honors legacy XAI_* when provider is xai or only xai key is set.
+        Provider / base URL / model: settings.yaml coach.* → provider defaults
+        (DEFAULT_PROVIDER_ID). .env only supplies keys (PRD D9).
         """
+        self._note_ignored_env()
         yaml_coach = (self.load_yaml().get("coach") or {})
-        provider_id = (
-            self.llm_provider
-            or yaml_coach.get("provider")
-            or DEFAULT_PROVIDER_ID
-        ).strip()
+        provider_id = str(yaml_coach.get("provider") or DEFAULT_PROVIDER_ID).strip()
 
-        # If user only has legacy XAI config and never set provider, keep xai
+        # Legacy: only an xAI key and no provider chosen in settings.yaml → keep xai
         if (
-            (not self.llm_provider or self.llm_provider == DEFAULT_PROVIDER_ID)
+            not yaml_coach.get("provider")
             and not self.llm_api_key
             and not self.stepfun_api_key
             and not self.deepseek_api_key
             and self.xai_api_key
-            and not yaml_coach.get("provider")
         ):
-            # Only auto-switch when default would leave them without a key for stepfun
-            if not self.stepfun_api_key and not self.llm_api_key:
-                provider_id = "xai"
+            provider_id = "xai"
 
         api_key_hint = self.llm_api_key
-        base_hint = self.llm_base_url
-        model_hint = self.llm_model
-
-        # Legacy xAI overrides when provider is xai
         if get_provider(provider_id).id == "xai":
             api_key_hint = api_key_hint or self.xai_api_key
-            base_hint = base_hint or self.xai_base_url
-            model_hint = model_hint or self.xai_model
 
-        # yaml optional overrides
-        base_hint = base_hint or str(yaml_coach.get("base_url") or "")
-        model_hint = model_hint or str(yaml_coach.get("model") or "")
+        base_hint = str(yaml_coach.get("base_url") or "")
+        model_hint = str(yaml_coach.get("model") or "")
 
         spec, key, url, model = resolve_llm_runtime(
             provider_id,
@@ -219,4 +235,43 @@ def save_env_values(pairs: dict[str, str]) -> Path:
     path = app_dir() / ".env"
     for k, v in pairs.items():
         path = save_env_value(k, v)
+    return path
+
+
+def save_coach_choice(provider_id: str, model: str = "", base_url: str = "") -> Path:
+    """Write coach.provider / model / base_url into config/settings.yaml (PRD D9:
+    the provider choice lives there, not in .env). Only those lines of the
+    ``coach:`` block change; comments and everything else are kept.
+    Empty model / base_url removes the override (provider default)."""
+    import re
+
+    path = config_dir() / "settings.yaml"
+    lines = path.read_text(encoding="utf-8").splitlines() if path.exists() else []
+    start = next((i for i, ln in enumerate(lines) if re.match(r"^coach\s*:", ln)), None)
+    if start is None:
+        if lines and lines[-1].strip():
+            lines.append("")
+        lines.append("coach:")
+        start = len(lines) - 1
+    end = start + 1
+    while end < len(lines) and (not lines[end].strip() or lines[end][:1] in (" ", "\t")):
+        end += 1
+    want = {"provider": provider_id, "model": model, "base_url": base_url}
+    block = lines[start + 1 : end]
+    out: list[str] = []
+    for ln in block:
+        m = re.match(r"^(\s+)(provider|model|base_url)\s*:", ln)
+        if m and m.group(2) in want:
+            name, val = m.group(2), want.pop(m.group(2))
+            if val:
+                out.append(f'{m.group(1)}{name}: "{val}"')
+            continue
+        out.append(ln)
+    new = [f'  {k}: "{v}"' for k, v in want.items() if v]
+    lines[start + 1 : end] = new + out
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    os.replace(tmp, path)
+    reload_settings()
     return path

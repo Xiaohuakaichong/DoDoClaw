@@ -62,3 +62,10 @@ def test_resolve_runtime_env():
 def test_provider_id_from_name():
     name = get_provider("deepseek").name
     assert provider_id_from_name(name) == "deepseek"
+
+
+def test_resolve_runtime_ignores_env_model_and_base_url():
+    """PRD D9: only keys come from the environment."""
+    env = {"STEPFUN_API_KEY": "sk-step", "LLM_MODEL": "x-model", "LLM_BASE_URL": "https://x.invalid/v1"}
+    spec, key, url, model = resolve_llm_runtime("stepfun_plan", env_get=env)
+    assert key == "sk-step" and url == spec.base_url.rstrip("/") and model == spec.default_model

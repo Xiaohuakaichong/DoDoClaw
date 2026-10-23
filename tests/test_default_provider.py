@@ -40,10 +40,68 @@ def test_existing_yaml_provider_is_kept(monkeypatch, tmp_path):
     assert s.resolve_llm()[0] == "stepfun_plan"
 
 
-def test_env_provider_still_wins(monkeypatch, tmp_path):
-    s = _settings(monkeypatch, tmp_path, 'coach:\n  provider: "deepseek"\n')
+def test_env_provider_and_model_are_ignored(monkeypatch, tmp_path, caplog):
+    """PRD D9: .env only holds keys; settings.yaml picks provider / model."""
+    import logging
+
+    from dodoclaw import config
+
+    _settings(monkeypatch, tmp_path, 'coach:\n  provider: "stepfun_plan"\n')
+    monkeypatch.setenv("LLM_PROVIDER", "deepseek")
+    monkeypatch.setenv("LLM_MODEL", "some-other-model")
+    monkeypatch.setenv("LLM_BASE_URL", "https://example.invalid/v1")
+    monkeypatch.setenv("STEPFUN_API_KEY", "sk-step-SECRET-123")
+    monkeypatch.setattr(config, "_ignored_logged", False)
+    caplog.set_level(logging.INFO, logger="dodoclaw.config")
+    pid, _n, key, url, model = Settings(_env_file=None).resolve_llm()
+    assert pid == "stepfun_plan" and url.endswith("/step_plan/v1") and model != "some-other-model"
+    assert key == "sk-step-SECRET-123"
+    lines = [r.getMessage() for r in caplog.records if "已忽略" in r.getMessage()]
+    assert len(lines) == 1 and "LLM_PROVIDER" in lines[0] and "settings.yaml" in lines[0]
+    assert "deepseek" not in lines[0] and "SECRET" not in caplog.text
+    Settings(_env_file=None).resolve_llm()  # logged only once
+    assert len([r for r in caplog.records if "已忽略" in r.getMessage()]) == 1
+
+
+def test_env_provider_does_not_override_code_default(monkeypatch, tmp_path):
+    _settings(monkeypatch, tmp_path, None)
     monkeypatch.setenv("LLM_PROVIDER", "stepfun_plan")
-    assert Settings(_env_file=None).resolve_llm()[0] == "stepfun_plan"
+    pid, _n, _k, _u, model = Settings(_env_file=None).resolve_llm()
+    assert (pid, model) == ("deepseek", "deepseek-flash")
+
+
+def test_yaml_model_and_base_url_are_used(monkeypatch, tmp_path):
+    s = _settings(
+        monkeypatch, tmp_path,
+        'coach:\n  provider: "stepfun_plan"\n  model: "step-3.5-flash"\n  base_url: "https://proxy.example/v1/"\n',
+    )
+    _pid, _n, _k, url, model = s.resolve_llm()
+    assert (url, model) == ("https://proxy.example/v1", "step-3.5-flash")
+
+
+def test_env_example_has_no_provider_or_model_lines():
+    names = [ln.split("=", 1)[0].strip() for ln in (ROOT / ".env.example").read_text(encoding="utf-8").splitlines()
+             if ln.strip() and not ln.lstrip().startswith("#")]
+    for bad in ("LLM_PROVIDER", "LLM_MODEL", "LLM_BASE_URL", "XAI_MODEL", "XAI_BASE_URL"):
+        assert bad not in names
+
+
+def test_save_coach_choice_keeps_comments_and_other_keys(monkeypatch, tmp_path):
+    from dodoclaw import config
+
+    cfg = tmp_path / "settings.yaml"
+    cfg.write_text(
+        'coach:\n  language: "zh-CN"\n  # 注释\n  provider: "deepseek"\n  base_url: "https://old/v1"\n'
+        '  max_reply_chars: 400\n\nui:\n  positions: [2]\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(config, "config_dir", lambda: tmp_path)
+    monkeypatch.setattr(config, "reload_settings", lambda: None)
+    config.save_coach_choice("stepfun_plan", "step-3.7-flash", "")
+    data = yaml.safe_load(cfg.read_text(encoding="utf-8"))
+    assert data["coach"]["provider"] == "stepfun_plan" and data["coach"]["model"] == "step-3.7-flash"
+    assert "base_url" not in data["coach"] and data["coach"]["max_reply_chars"] == 400
+    assert data["ui"] == {"positions": [2]} and "# 注释" in cfg.read_text(encoding="utf-8")
 
 
 def test_default_template_is_deepseek():

@@ -18,7 +18,7 @@ from dodoclaw.audio_providers import (
     list_stt_backends,
     list_tts_backends,
 )
-from dodoclaw.config import get_settings, save_env_values
+from dodoclaw.config import get_settings, save_coach_choice, save_env_values
 from dodoclaw.gsi_install import install_gsi_cfg
 from dodoclaw.providers import (
     DEFAULT_PROVIDER_ID,
@@ -869,15 +869,12 @@ class DoDoClawDesktop(ctk.CTk):
             return
         self.base_entry.delete(0, tk.END)
         self.base_entry.insert(0, base)
-        pairs = {
-            "LLM_PROVIDER": pid,
-            "LLM_API_KEY": key,
-            "LLM_BASE_URL": base,
-            "LLM_MODEL": model,
-        }
+        # PRD D9: .env only holds keys; provider / model go to config/settings.yaml
+        pairs = {"LLM_API_KEY": key}
         if spec.key_env and spec.key_env != "LLM_API_KEY":
             pairs[spec.key_env] = key
-        path = save_env_values(pairs)
+        save_env_values(pairs)
+        path = save_coach_choice(pid, model, "" if base.rstrip("/") == spec.base_url.rstrip("/") else base)
         if self._service:
             self._apply_llm_to_service(rebuild_voice=False)
         self._append_system(f"已保存 · {spec.name} / {model}")

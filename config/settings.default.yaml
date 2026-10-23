@@ -1,5 +1,5 @@
 # DoDoClaw 新用户默认配置模板（首次运行复制为 config/settings.yaml；已有的不会被覆盖）
-# DoDoClaw default settings (overridden by env / .env)
+# 服务商和模型只在这里选（coach.provider / coach.model）；.env 只放 Key
 
 gsi:
   host: "127.0.0.1"
@@ -12,7 +12,7 @@ coach:
   # CN: deepseek | stepfun_plan | stepfun | dashscope | zhipu | moonshot | siliconflow | volcengine | …
   # 默认 DeepSeek：模型 deepseek-flash，关闭思考模式（代码里自动带 thinking: disabled）
   provider: "deepseek"
-  # Optional overrides (empty = use provider defaults / .env)
+  # 可选覆盖（留空 = 用服务商默认值）
   # base_url: "https://api.deepseek.com"
   # model: "deepseek-flash"
   max_reply_chars: 400

@@ -364,8 +364,6 @@ class DoDoClawService:
     ) -> None:
         """Hot-reload provider / key / model on the coach client."""
         self.settings = reload_settings()
-        pid = provider_id or self.settings.llm_provider or self.provider_id
-        spec = get_provider(pid)
         pid, pname, key, url, mdl = self.settings.resolve_llm()
         if provider_id:
             spec = get_provider(provider_id)
@@ -376,8 +374,8 @@ class DoDoClawService:
             _, key2, url2, mdl2 = resolve_llm_runtime(
                 pid,
                 api_key=api_key or self.settings.llm_api_key,
-                base_url=base_url or self.settings.llm_base_url,
-                model=model or self.settings.llm_model,
+                base_url=base_url or "",
+                model=model or "",
             )
             key, url, mdl = key2, url2, mdl2
             if api_key:

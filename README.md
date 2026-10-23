@@ -44,7 +44,8 @@ python -m venv .venv
 pip install -e ".[app]"
 
 copy .env.example .env
-# 编辑 .env，填入 XAI_API_KEY=...
+# 编辑 .env，只填 Key（如 DEEPSEEK_API_KEY=... / STEPFUN_API_KEY=...）
+# 服务商和模型在 config\settings.yaml 的 coach.provider / coach.model 里选
 
 # 桌面 App（默认）
 python -m dodoclaw gui
@@ -176,7 +177,7 @@ STEPFUN_API_KEY=...
 
 ## LLM Provider（国内优先）
 
-所有 Provider 均为 **OpenAI Chat Completions 兼容**。GUI 左侧可切换；也可写 `.env`。
+所有 Provider 均为 **OpenAI Chat Completions 兼容**。服务商和模型只在 `config\settings.yaml` 的 `coach:` 里选（旧版 GUI 左侧切换后也会写到这里）；`.env` 只放 Key。
 
 | ID | 名称 | 默认 Base URL |
 |----|------|----------------|
@@ -191,14 +192,22 @@ STEPFUN_API_KEY=...
 | `minimax` / `yi` / `baichuan` | MiniMax / 零一 / 百川 | 见 `providers.py` |
 | `xai` / `openai` / `custom` | Grok / OpenAI / 自定义 | 可改 Base URL |
 
-```env
-LLM_PROVIDER=stepfun_plan
-LLM_API_KEY=你的密钥
-# 可选覆盖：
-# LLM_BASE_URL=https://api.stepfun.com/step_plan/v1
-# LLM_MODEL=step-3.7-flash
-# 或使用 STEPFUN_API_KEY / DEEPSEEK_API_KEY / DASHSCOPE_API_KEY …
+```yaml
+# config\settings.yaml
+coach:
+  provider: "stepfun_plan"
+  # 可选覆盖：
+  # base_url: "https://api.stepfun.com/step_plan/v1"
+  # model: "step-3.7-flash"
 ```
+
+```env
+# .env —— 只放 Key
+STEPFUN_API_KEY=你的密钥
+# 或 LLM_API_KEY / DEEPSEEK_API_KEY / DASHSCOPE_API_KEY …
+```
+
+> `.env` 里的 `LLM_PROVIDER` / `LLM_MODEL` / `LLM_BASE_URL` 已不再生效（启动日志里会提示一行），请改到 `settings.yaml`。
 
 > Step Plan / Coding Plan 必须用 **`stepfun_plan`** 端点（`/step_plan/v1`），不要用标准 `/v1`，否则走不到订阅额度。
 
