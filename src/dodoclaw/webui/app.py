@@ -93,6 +93,12 @@ def hero_zh(key: str) -> str:
     return _HERO_ZH.get(key) or key
 
 
+def _preview_voice_zh(configured: str) -> str:
+    from dodoclaw.webui import tts_preview
+
+    return tts_preview.voice_label(tts_preview.edge_voice(configured))
+
+
 def _version() -> str:
     try:
         from importlib.metadata import version
@@ -368,6 +374,7 @@ class Bridge:
                 "whisper_ready": importlib.util.find_spec("faster_whisper") is not None,
                 "tts_on": svc.tts_backend != "mock",
                 "tts_zh": TTS_ZH.get(svc.tts_backend, "已配置"),
+                "preview_voice_zh": _preview_voice_zh(getattr(svc, "tts_voice", "")),
             },
             "adv": {
                 "online": age is not None and age < 35,
@@ -475,11 +482,15 @@ class Bridge:
             return {"ok": False, "msg": "播报没能启动，详情见日志"}
         return {"ok": (self._svc.tts_backend != "mock") == bool(on), "msg": ""}
 
-    def preview_tts(self) -> bool:
-        if self._svc.tts_backend == "mock":
-            return False
-        self._speaker.say("肉山快复活了", self._prio[1])
-        return True
+    def preview_tts(self) -> dict[str, Any]:
+        """试听 with Edge TTS, regardless of whether 语音播报 is on. Returns {ok, msg}."""
+        from dodoclaw.webui import tts_preview
+
+        try:
+            return tts_preview.preview(tts_preview.edge_voice(getattr(self._svc, "tts_voice", "")))
+        except Exception:
+            logger.exception("tts preview failed")
+            return {"ok": False, "msg": tts_preview.MSG_UNKNOWN}
 
     def rewrite_cfg(self) -> dict[str, Any]:
         from dodoclaw.gsi_install import install_gsi_cfg

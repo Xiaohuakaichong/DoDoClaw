@@ -81,7 +81,8 @@ function renderCoach(s) {
   $('#tts-pill').className = 'pill ' + (v.tts_on ? 'ok' : 'mute');
   $('#tts-pill').innerHTML = v.tts_on ? '<span class="dot ok"></span>已开启' : '未配置';
   $('#sw-tts').classList.toggle('on', v.tts_on);
-  $('#tts-name').textContent = v.tts_on ? v.tts_zh : '没开播报，提醒只在小窗显示';
+  // voice + 试听 stay enabled whether 播报 is on or off
+  $('#tts-name').textContent = v.preview_voice_zh || 'Edge 免费声音';
   // 语音提问
   $('#sw-ask').classList.toggle('on', v.ask_on);
   // 语音提问关着时，识别方式和快捷键都不能点
@@ -172,7 +173,13 @@ onReady(async () => {
   $('#btn-apply').onclick = () => api().open_key_page();
   // voice
   $('#sw-tts').onclick = async () => { const r = await api().set_tts(!S.voice.tts_on); if (r.msg) toast(r.msg, { icon: 'alert' }); else flashSaved(); refresh(); };
-  $('#btn-preview').onclick = async () => { if (!(await api().preview_tts())) toast('先打开语音播报再试听', { icon: 'alert' }); };
+  $('#btn-preview').onclick = async () => {
+    const b = $('#btn-preview'); if (b.classList.contains('busy')) return;
+    b.classList.add('busy');
+    try { const r = await api().preview_tts(); if (!r || !r.ok) toast((r && r.msg) || '试听失败，详情见日志', { icon: 'alert' }); }
+    catch (e) { toast('试听失败，详情见日志', { icon: 'alert' }); }
+    finally { b.classList.remove('busy'); }
+  };
   $('#sw-ask').onclick = () => save({ voice_ask: !S.voice.ask_on });
   document.querySelectorAll('.opt').forEach(o => o.onclick = () => { if (S.voice.ask_on) save({ stt_mode: o.dataset.m }); });
   $('#btn-hotkey').onclick = () => { if (S.voice.ask_on) toast('全局快捷键还在做，先点麦克风提问'); };
