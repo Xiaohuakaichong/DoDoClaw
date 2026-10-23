@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import logging
+import os
 import tempfile
-import sys
+import uuid
 import wave
 from pathlib import Path
 
@@ -47,46 +48,80 @@ def record_pcm16(seconds: float = 5.0, sample_rate: int = 16000) -> bytes:
         path.unlink(missing_ok=True)
 
 
-def play_audio_file(path: Path) -> None:
-    """Play mp3/wav via pygame if available; else best-effort OS open."""
+class PlaybackUnavailable(RuntimeError):
+    """No playback backend on this machine (no pygame, and not Windows for MCI)."""
+
+
+def _is_windows() -> bool:
+    return os.name == "nt"
+
+
+def _play_pygame(path: Path) -> None:
+    import pygame  # ImportError when not installed (e.g. Python 3.14)
+
+    if not pygame.mixer.get_init():
+        pygame.mixer.init()
+    pygame.mixer.music.load(str(path))
+    pygame.mixer.music.play()
+    while pygame.mixer.music.get_busy():
+        pygame.time.wait(40)
+    try:
+        pygame.mixer.music.unload()  # release the file so the temp copy can be deleted
+    except Exception:
+        pass
+
+
+def _mci_send(command: str) -> int:
+    """winmm.mciSendStringW; returns the MCI error code (0 = ok)."""
+    import ctypes
+
+    return int(ctypes.windll.winmm.mciSendStringW(command, None, 0, None))
+
+
+def _play_mci(path: Path) -> None:
+    """Blocking playback through Windows MCI (mp3 via mpegvideo, wav via waveaudio)."""
+    kind = "mpegvideo" if path.suffix.lower() == ".mp3" else "waveaudio"
+    alias = f"dodoclaw_{uuid.uuid4().hex[:8]}"
+    err = _mci_send(f'open "{path}" type {kind} alias {alias}')
+    if err:
+        raise RuntimeError(f"MCI open failed ({err})")
+    try:
+        err = _mci_send(f"play {alias} wait")
+        if err:
+            raise RuntimeError(f"MCI play failed ({err})")
+    finally:
+        _mci_send(f"close {alias}")
+
+
+def play_audio(path: Path) -> None:
+    """Play mp3/wav, blocking. pygame first, then Windows MCI.
+
+    Raises PlaybackUnavailable when neither backend exists, RuntimeError when a
+    backend exists but playback failed.
+    """
     path = Path(path)
     if not path.exists():
-        return
+        raise FileNotFoundError(str(path))
+    pygame_missing = False
     try:
-        import pygame
-
-        if not pygame.mixer.get_init():
-            pygame.mixer.init()
-        pygame.mixer.music.load(str(path))
-        pygame.mixer.music.play()
-        while pygame.mixer.music.get_busy():
-            pygame.time.wait(40)
+        _play_pygame(path)
         return
+    except ImportError:
+        pygame_missing = True
+        logger.debug("pygame not installed")
     except Exception:
-        logger.debug("pygame playback unavailable", exc_info=True)
+        logger.debug("pygame playback failed", exc_info=True)
+    if _is_windows():
+        _play_mci(path)
+        return
+    if pygame_missing:
+        raise PlaybackUnavailable("no pygame and no Windows MCI")
+    raise RuntimeError("pygame playback failed")
 
-    # Windows fallback for mp3/wav without extra deps (MCI via winmm)
-    if sys.platform == "win32":
-        try:
-            import ctypes
 
-            mci = ctypes.windll.winmm.mciSendStringW
-            alias = "dodoclaw_tts"
-            mci(f"close {alias}", None, 0, None)
-            if mci(f'open "{path}" alias {alias}', None, 0, None) == 0:
-                mci(f"play {alias} wait", None, 0, None)
-                mci(f"close {alias}", None, 0, None)
-                return
-        except Exception:
-            logger.debug("MCI playback failed", exc_info=True)
-    # Windows fallback for wav
-    if path.suffix.lower() == ".wav":
-        try:
-            import winsound
-
-            winsound.PlaySound(str(path), winsound.SND_FILENAME)
-            return
-        except Exception:
-            logger.debug("winsound failed", exc_info=True)
-
-    logger.warning("无法播放音频，文件已保存: %s", path)
+def play_audio_file(path: Path) -> None:
+    """Best-effort playback (never raises); used by the TTS backends."""
+    try:
+        play_audio(path)
+    except Exception as exc:
+        logger.warning("无法播放音频（%s）: %s", type(exc).__name__, path)

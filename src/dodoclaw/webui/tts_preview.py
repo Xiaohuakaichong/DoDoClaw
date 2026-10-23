@@ -14,6 +14,8 @@ import threading
 from pathlib import Path
 from typing import Any, Callable
 
+from dodoclaw.voice.audio_io import PlaybackUnavailable
+
 logger = logging.getLogger(__name__)
 
 DEFAULT_VOICE = "zh-CN-XiaoxiaoNeural"
@@ -58,19 +60,10 @@ def _is_network_error(exc: BaseException) -> bool:
     )
 
 
-def _pygame_play(path: Path) -> None:
-    import pygame  # ImportError -> MSG_NO_PLAYER
+def _default_player(path: Path) -> None:
+    from dodoclaw.voice.audio_io import play_audio
 
-    if not pygame.mixer.get_init():
-        pygame.mixer.init()
-    pygame.mixer.music.load(str(path))
-    pygame.mixer.music.play()
-    while pygame.mixer.music.get_busy():
-        pygame.time.wait(40)
-    try:
-        pygame.mixer.music.unload()
-    except Exception:  # older pygame
-        pass
+    play_audio(path)  # pygame, then Windows MCI
 
 
 def preview(
@@ -89,7 +82,7 @@ def preview(
                 edge_module = importlib.import_module("edge_tts")
             except ImportError:
                 return {"ok": False, "msg": MSG_NO_EDGE}
-        player = player or _pygame_play
+        player = player or _default_player
 
         with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as tmp:
             out = Path(tmp.name)
@@ -103,7 +96,7 @@ def preview(
                 return {"ok": False, "msg": MSG_NETWORK if _is_network_error(exc) else MSG_UNKNOWN}
             try:
                 player(out)
-            except ImportError:
+            except (PlaybackUnavailable, ImportError):
                 return {"ok": False, "msg": MSG_NO_PLAYER}
             except Exception as exc:
                 logger.warning("tts preview playback failed: %s", type(exc).__name__)
