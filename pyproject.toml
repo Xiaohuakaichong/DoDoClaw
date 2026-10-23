@@ -55,7 +55,7 @@ dodoclaw-gui = "dodoclaw.gui.app:run_gui"
 where = ["src"]
 
 [tool.setuptools.package-data]
-dodoclaw = ["webui/static/*", "data/*.json"]
+dodoclaw = ["webui/static/*", "webui/static/fonts/*", "data/*.json"]
 
 [tool.ruff]
 line-length = 100

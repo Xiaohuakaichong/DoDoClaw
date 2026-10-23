@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import tempfile
+import sys
 import wave
 from pathlib import Path
 
@@ -64,6 +65,20 @@ def play_audio_file(path: Path) -> None:
     except Exception:
         logger.debug("pygame playback unavailable", exc_info=True)
 
+    # Windows fallback for mp3/wav without extra deps (MCI via winmm)
+    if sys.platform == "win32":
+        try:
+            import ctypes
+
+            mci = ctypes.windll.winmm.mciSendStringW
+            alias = "dodoclaw_tts"
+            mci(f"close {alias}", None, 0, None)
+            if mci(f'open "{path}" alias {alias}', None, 0, None) == 0:
+                mci(f"play {alias} wait", None, 0, None)
+                mci(f"close {alias}", None, 0, None)
+                return
+        except Exception:
+            logger.debug("MCI playback failed", exc_info=True)
     # Windows fallback for wav
     if path.suffix.lower() == ".wav":
         try:
