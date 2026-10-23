@@ -159,3 +159,52 @@ def test_overlay_min_size_allows_compact_pill():
     src = (webapp.Path(webapp.__file__)).read_text(encoding="utf-8")
     assert "min_size=(100, 40)" in src
     assert webapp.OV_COMPACT[0] >= 100 and webapp.OV_COMPACT[1] >= 40
+
+
+def test_keep_on_top_uses_ctypes_setwindowpos_without_show():
+    seen = []
+
+    class U:
+        def SetWindowPos(self, hwnd, after, x, y, cx, cy, flags):
+            seen.append((hwnd.value, after.value, flags))
+            return 1
+
+    assert winshape.keep_on_top(4242, user32=U()) is True
+    hwnd, after, flags = seen[0]
+    assert hwnd == 4242 and after == ctypes.c_void_p(-1).value
+    assert flags & winshape.SWP_NOSIZE and flags & winshape.SWP_NOMOVE and flags & winshape.SWP_NOACTIVATE
+    assert not flags & 0x0040  # SWP_SHOWWINDOW would pop a hidden overlay up
+    assert winshape.keep_on_top(None, user32=U()) is False
+
+
+def test_watch_never_uses_pywebview_on_top_setter():
+    # window.on_top = True sets WinForms TopMost from a worker thread with the GIL
+    # held -> deadlock with the UI thread's resize handler (overlay freeze).
+    src = webapp.Path(webapp.__file__).read_text(encoding="utf-8")
+    body = src.split("def _watch(self)")[1].split("def run_webui")[0]
+    assert ".on_top" not in body and "_keep_overlay_on_top()" in body
+
+
+def test_overlay_calls_are_serialized(monkeypatch):
+    import threading
+    import time
+
+    b, calls = _bridge_with_window(monkeypatch, "region")
+    active, overlap = [0], []
+
+    def slow_resize(w, h):
+        active[0] += 1
+        if active[0] > 1:
+            overlap.append((w, h))
+        time.sleep(0.01)
+        active[0] -= 1
+
+    b._ov_win.resize = slow_resize
+    monkeypatch.setattr(winshape, "keep_on_top", lambda h: slow_resize(0, 0))
+    ts = [threading.Thread(target=f) for f in (b.toggle_compact, lambda: b.fit_overlay(320, 106),
+                                                b._keep_overlay_on_top, b.toggle_compact) for _ in range(5)]
+    for t in ts:
+        t.start()
+    for t in ts:
+        t.join()
+    assert overlap == []

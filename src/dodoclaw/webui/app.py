@@ -551,24 +551,35 @@ class Bridge:
         self._icons._failed.clear()
         return n
 
+    # Every overlay window call (show/hide/move/resize/shape/topmost) goes through
+    # this one lock, so JS-api threads, the watch thread and pywebview events never
+    # touch the window at the same time. Class-level so tests' Bridge.__new__ has it.
+    _ov_lock = threading.RLock()
+
     def reset_overlay_pos(self) -> bool:
         if self._ov_win is None:
             return False
-        if self._ov_shown:
-            self._ov_win.move(*OV_POS)
-        else:
-            self._ov_pending_pos = OV_POS
+        with self._ov_lock:
+            if self._ov_shown:
+                self._ov_win.move(*OV_POS)
+            else:
+                self._ov_pending_pos = OV_POS
         return True
 
     def toggle_overlay(self) -> bool:
-        shown = not (self.overlay_forced if self.overlay_forced is not None else False)
-        self.overlay_forced = shown
-        self._set_overlay_visible(shown)
+        with self._ov_lock:
+            shown = not (self.overlay_forced if self.overlay_forced is not None else False)
+            self.overlay_forced = shown
+            self._set_overlay_visible(shown)
         return shown
 
     def _set_overlay_visible(self, want: bool) -> None:
         if self._ov_win is None:
             return
+        with self._ov_lock:
+            self._set_overlay_visible_locked(want)
+
+    def _set_overlay_visible_locked(self, want: bool) -> None:
         if not want:
             self._ov_shown = False
             self._ov_win.hide()
@@ -583,11 +594,12 @@ class Bridge:
             self._resize_overlay(*size)
 
     def _resize_overlay(self, w: int, h: int) -> None:
-        if not self._ov_shown:
-            self._ov_pending_size = (w, h)
-            return
-        self._ov_win.resize(w, h)
-        self._shape_overlay()
+        with self._ov_lock:
+            if not self._ov_shown:
+                self._ov_pending_size = (w, h)
+                return
+            self._ov_win.resize(w, h)
+            self._shape_overlay()
 
     def fit_overlay(self, w: int, h: int) -> None:
         if self._ov_win is not None and 100 <= int(w) <= 800 and 40 <= int(h) <= 900:
@@ -601,16 +613,34 @@ class Bridge:
 
         if self._ov_shape == "dwm":  # DWM keeps the corners through resizes
             return
-        try:
-            self._ov_shape = winshape.round_corners(winshape.hwnd_of(self._ov_win))
-        except Exception:
-            logger.debug("overlay corner shaping failed", exc_info=True)
+        with self._ov_lock:
+            try:
+                self._ov_shape = winshape.round_corners(winshape.hwnd_of(self._ov_win))
+            except Exception:
+                logger.debug("overlay corner shaping failed", exc_info=True)
 
     def toggle_compact(self) -> bool:
-        self.compact = not self.compact
-        if self._ov_win:
-            self._resize_overlay(*(OV_COMPACT if self.compact else (OV_W, OV_H)))
-        return self.compact
+        with self._ov_lock:
+            self.compact = not self.compact
+            if self._ov_win:
+                self._resize_overlay(*(OV_COMPACT if self.compact else (OV_W, OV_H)))
+            return self.compact
+
+    def _keep_overlay_on_top(self) -> None:
+        """Re-assert topmost without pywebview's ``on_top`` setter.
+
+        ``window.on_top = True`` sets the WinForms ``TopMost`` property from this
+        worker thread. pythonnet keeps the GIL during property sets, and TopMost
+        calls SetWindowPos, which waits for the UI thread; if the UI thread is in
+        a resize/move handler that needs the GIL (pywebview's on_resize/on_move),
+        both wait forever and the app freezes (seen on compact/expand). A ctypes
+        SetWindowPos releases the GIL while it waits.
+        """
+        from dodoclaw.webui import winshape
+
+        with self._ov_lock:
+            if self._ov_win is not None and self._ov_shown:
+                winshape.keep_on_top(winshape.hwnd_of(self._ov_win))
 
     def minimize(self) -> None:
         if self._main_win:
@@ -640,7 +670,7 @@ class Bridge:
                 if self._ov_win and want != self._ov_shown:
                     self._set_overlay_visible(want)
                 if self._ov_win and self._ov_shown:
-                    self._ov_win.on_top = True
+                    self._keep_overlay_on_top()
             except Exception:
                 logger.debug("watch loop", exc_info=True)
 

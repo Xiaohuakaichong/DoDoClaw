@@ -103,3 +103,26 @@ def _apply_region(hwnd: int, user32, gdi32) -> str:
         gdi32.DeleteObject(rgn)
         return ""
     return "region"
+
+
+HWND_TOPMOST = -1
+SWP_NOSIZE, SWP_NOMOVE, SWP_NOACTIVATE, SWP_NOOWNERZORDER = 0x0001, 0x0002, 0x0010, 0x0200
+TOPMOST_FLAGS = SWP_NOSIZE | SWP_NOMOVE | SWP_NOACTIVATE | SWP_NOOWNERZORDER  # no SWP_SHOWWINDOW
+
+
+def keep_on_top(hwnd: int | None, user32=None) -> bool:
+    """Put the window back on top via ctypes (releases the GIL while the UI thread
+    handles the move). Never shows a hidden window or steals focus."""
+    if not hwnd:
+        return False
+    import ctypes
+
+    if user32 is None:
+        if sys.platform != "win32":
+            return False
+        user32 = ctypes.windll.user32
+    try:
+        return bool(user32.SetWindowPos(ctypes.c_void_p(hwnd), ctypes.c_void_p(HWND_TOPMOST), 0, 0, 0, 0, TOPMOST_FLAGS))
+    except Exception:
+        logger.debug("keep_on_top failed", exc_info=True)
+        return False
