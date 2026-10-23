@@ -15,7 +15,8 @@ from typing import Any
 
 import yaml
 
-BUDGET_CAP = 30
+BUDGET_CAP = 30  # suggested per-game ceiling; the default config stays under it, but users may exceed it
+OVER_CAP_HINT = f"超过建议的 {BUDGET_CAP} 条，对局中可能比较吵"
 LEAD_MIN, LEAD_MAX = 5, 60
 POSITIONS = (1, 2, 3, 4, 5)
 
@@ -32,6 +33,11 @@ REMINDERS: dict[str, tuple[int, int | None]] = {
     "buyback": (3, None),  # 后期买活（状态变化）
     "lowhp": (0, None),  # 低血量 · 大招就绪 — default off, not counted
 }
+
+# Rows the reminder engine has no rule for yet: shown greyed out as 即将上线,
+# always off, cannot be switched on, and not counted in the per-game budget.
+PENDING = frozenset({"shrine", "cube", "roshan", "aegis", "tp"})
+PENDING_MSG = "这条提醒还在做"
 
 # reminder engine key family -> settings row
 FAMILY_TO_ROW = {
@@ -53,6 +59,8 @@ FAMILY_TO_ROW = {
 
 def default_on(row: str, positions: list[int] | tuple[int, ...]) -> bool:
     pos = set(positions or ())
+    if row in PENDING:
+        return False
     if row == "bounty":
         return bool(pos & {4, 5})
     if row == "runes":
@@ -80,7 +88,11 @@ def defaults(positions: list[int] | None = None) -> dict[str, Any]:
 
 
 def budget(rem: dict[str, dict[str, Any]]) -> int:
-    return sum(REMINDERS[k][0] for k, v in rem.items() if k in REMINDERS and v.get("on"))
+    return sum(
+        REMINDERS[k][0]
+        for k, v in rem.items()
+        if k in REMINDERS and k not in PENDING and v.get("on")
+    )
 
 
 def merge(saved: dict[str, Any] | None) -> dict[str, Any]:
@@ -90,11 +102,10 @@ def merge(saved: dict[str, Any] | None) -> dict[str, Any]:
     out = defaults(pos)
     for k, v in (saved.get("reminders") or {}).items():
         if k in out["reminders"] and isinstance(v, dict):
-            if "on" in v:
+            if "on" in v and k not in PENDING:
                 out["reminders"][k]["on"] = bool(v["on"])
-            if out["reminders"][k]["lead"] is not None and v.get("lead") is not None:
-                out["reminders"][k]["lead"] = clamp_lead(v["lead"])
-    out["overrides"] = [k for k in (saved.get("overrides") or []) if k in REMINDERS]
+            # lead times are not user-editable until the engine supports them
+    out["overrides"] = [k for k in (saved.get("overrides") or []) if k in REMINDERS and k not in PENDING]
     for k in ("voice_ask", "auto_overlay", "reduce_motion"):
         if saved.get(k) is not None:
             out[k] = bool(saved[k])
@@ -122,19 +133,19 @@ def apply_positions(cur: dict[str, Any], positions: list[int]) -> dict[str, Any]
     pos = sorted({int(p) for p in positions if int(p) in POSITIONS}) or [1]
     out["positions"] = pos
     for k in REMINDERS:
-        if k not in out["overrides"]:
+        if k not in out["overrides"] or k in PENDING:
             out["reminders"][k]["on"] = default_on(k, pos)
     return out
 
 
 def toggle_reminder(cur: dict[str, Any], row: str, on: bool) -> tuple[dict[str, Any], str]:
-    """Returns (new_settings, error_zh). Refuses to go over the per-game cap."""
+    """Returns (new_settings, error_zh). Going over BUDGET_CAP is allowed (UI warns)."""
     if row not in REMINDERS:
         return cur, "没有这项提醒"
+    if row in PENDING:
+        return cur, PENDING_MSG
     out = copy.deepcopy(cur)
     out["reminders"][row]["on"] = bool(on)
-    if on and not cur["reminders"][row]["on"] and budget(out["reminders"]) > BUDGET_CAP:
-        return cur, f"一局最多 {BUDGET_CAP} 条，先关掉别的再开这项"
     if row not in out["overrides"]:
         out["overrides"].append(row)
     return out, ""

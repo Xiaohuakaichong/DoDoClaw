@@ -60,10 +60,17 @@ def ensure_user_config_seeded() -> None:
     target = app_dir() / "config"
     if not bundled.exists():
         return
-    for name in ("settings.yaml", "gamestate_integration_dodoclaw.cfg"):
-        src = bundled / name
+    # New users get the template (settings.default.yaml); an existing settings.yaml is never touched.
+    seeds = {
+        "settings.yaml": ("settings.default.yaml", "settings.yaml"),
+        "gamestate_integration_dodoclaw.cfg": ("gamestate_integration_dodoclaw.cfg",),
+    }
+    for name, sources in seeds.items():
         dest = target / name
-        if src.exists() and not dest.exists():
+        if dest.exists():
+            continue
+        src = next((bundled / s for s in sources if (bundled / s).exists()), None)
+        if src is not None:
             dest.write_bytes(src.read_bytes())
 
     env_example = bundle_dir() / ".env.example"

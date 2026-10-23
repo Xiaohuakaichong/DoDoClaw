@@ -17,6 +17,8 @@ class ProviderSpec:
     region: str = "cn"  # cn | global | custom
     note: str = ""
     docs_url: str = ""
+    # Send {"thinking": {"type": "disabled"}} on chat completions (DeepSeek V4 models think by default)
+    thinking_off: bool = False
 
     def model_choices(self) -> list[str]:
         items = list(self.models) if self.models else [self.default_model]
@@ -57,10 +59,12 @@ PROVIDERS: dict[str, ProviderSpec] = {
         id="deepseek",
         name="DeepSeek",
         base_url="https://api.deepseek.com",
-        default_model="deepseek-chat",
-        models=("deepseek-chat", "deepseek-reasoner"),
+        default_model="deepseek-flash",
+        models=("deepseek-flash", "deepseek-v4-pro"),
         key_env="DEEPSEEK_API_KEY",
         region="cn",
+        note="默认 deepseek-flash，关闭思考模式（回答更快更省）",
+        thinking_off=True,
         docs_url="https://platform.deepseek.com/api-docs/",
     ),
     "dashscope": ProviderSpec(
@@ -187,7 +191,17 @@ PROVIDERS: dict[str, ProviderSpec] = {
     ),
 }
 
-DEFAULT_PROVIDER_ID = "stepfun_plan"
+# New-user default. An explicit LLM_PROVIDER in .env or coach.provider in
+# config/settings.yaml always wins over this.
+DEFAULT_PROVIDER_ID = "deepseek"
+
+
+def chat_extra_body(provider_id: str | None, model: str = "") -> dict:
+    """Provider-specific extra fields for chat.completions (e.g. DeepSeek thinking off)."""
+    spec = get_provider(provider_id)
+    if spec.thinking_off and (not model or model.startswith("deepseek")):
+        return {"thinking": {"type": "disabled"}}
+    return {}
 
 
 def list_providers() -> list[ProviderSpec]:

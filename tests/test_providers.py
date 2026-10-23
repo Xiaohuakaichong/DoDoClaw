@@ -7,11 +7,16 @@ from dodoclaw.providers import (
 )
 
 
-def test_default_is_stepfun_plan():
-    assert DEFAULT_PROVIDER_ID == "stepfun_plan"
+def test_default_is_deepseek_flash():
+    assert DEFAULT_PROVIDER_ID == "deepseek"
     p = get_provider(None)
-    assert p.id == "stepfun_plan"
-    assert "step_plan" in p.base_url
+    assert p.id == "deepseek" and p.default_model == "deepseek-flash"
+    assert p.base_url == "https://api.deepseek.com"
+
+
+def test_stepfun_plan_still_available():
+    p = get_provider("stepfun_plan")
+    assert p.id == "stepfun_plan" and "step_plan" in p.base_url
 
 
 def test_cn_providers_present():

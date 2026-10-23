@@ -180,9 +180,9 @@ STEPFUN_API_KEY=...
 
 | ID | 名称 | 默认 Base URL |
 |----|------|----------------|
-| `stepfun_plan` | **阶跃星辰 Step Plan（Coding Plan）** ★默认 | `https://api.stepfun.com/step_plan/v1` |
+| `stepfun_plan` | 阶跃星辰 Step Plan（Coding Plan） | `https://api.stepfun.com/step_plan/v1` |
 | `stepfun` | 阶跃星辰标准 API | `https://api.stepfun.com/v1` |
-| `deepseek` | DeepSeek | `https://api.deepseek.com` |
+| `deepseek` | **DeepSeek** ★默认（`deepseek-flash`，关闭思考模式） | `https://api.deepseek.com` |
 | `dashscope` | 通义千问 | `https://dashscope.aliyuncs.com/compatible-mode/v1` |
 | `zhipu` | 智谱 GLM | `https://open.bigmodel.cn/api/paas/v4` |
 | `moonshot` | Kimi 月之暗面 | `https://api.moonshot.cn/v1` |

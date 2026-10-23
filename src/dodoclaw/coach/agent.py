@@ -4,6 +4,7 @@ import logging
 from typing import Any
 
 from dodoclaw.coach.prompts import DEFAULT_SYSTEM, build_user_message
+from dodoclaw.providers import DEFAULT_PROVIDER_ID, chat_extra_body
 from dodoclaw.gsi.state import GameSnapshot
 
 logger = logging.getLogger(__name__)
@@ -19,7 +20,7 @@ class CoachAgent:
         model: str = "step-3.7-flash",
         system_prompt: str | None = None,
         max_reply_chars: int = 280,
-        provider_id: str = "stepfun_plan",
+        provider_id: str = DEFAULT_PROVIDER_ID,
         provider_name: str = "",
     ) -> None:
         self.api_key = api_key
@@ -99,6 +100,7 @@ class CoachAgent:
                 ],
                 temperature=0.55,
                 max_tokens=500,
+                extra_body=chat_extra_body(self.provider_id, self.model) or None,
             )
             text = (resp.choices[0].message.content or "").strip()
         except Exception:

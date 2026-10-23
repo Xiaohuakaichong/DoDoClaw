@@ -11,7 +11,8 @@ block_cipher = None
 ROOT = Path(SPECPATH).resolve().parent
 
 datas = [
-    (str(ROOT / "config" / "settings.yaml"), "config"),
+    # New-user defaults only; the developer's own config/settings.yaml is not shipped
+    (str(ROOT / "config" / "settings.default.yaml"), "config"),
     (str(ROOT / "config" / "gamestate_integration_dodoclaw.cfg"), "config"),
     (str(ROOT / ".env.example"), "."),
 ]

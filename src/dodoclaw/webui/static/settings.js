@@ -1,5 +1,5 @@
 // Settings page. Key values never reach JS: only "configured" booleans and the env var name to add.
-let S = null, lastS = null;
+let S = null, lastS = null, testing = false;
 const ROWS = {
   bounty: { n: '赏金符', s: '0:00 起每 3 分钟，报到 15:00 · 4、5 号位默认开', ico: 'coin', cls: 'gold' },
   runes: { n: '水符 · 强化符', s: '水符 2:00 / 4:00，强化符报到 20:00 · 2 号位默认开', ico: 'rune' },
@@ -36,35 +36,33 @@ function renderRem(s) {
   $('#bud-n').textContent = s.budget; $('#bud-cap').textContent = s.budget_cap;
   $('#bud-bar').style.width = Math.min(100, s.budget / s.budget_cap * 100).toFixed(0) + '%';
   $('#budget').classList.toggle('over', s.budget > s.budget_cap);
+  $('#bud-hint').textContent = s.budget > s.budget_cap ? s.over_cap_hint : '';
+  const pending = new Set(s.pending || []);
   const box = $('#rrows');
   if (!box.children.length) {
     box.innerHTML = Object.entries(ROWS).map(([k, r]) => {
       const ic = r.item ? `<span class="it" data-n="${r.label}" id="it-${k}"></span>` : `<span class="gl ${r.cls || ''}"><svg class="ico"><use href="#${r.ico}"/></svg></span>`;
+      // lead times are read-only until the reminder engine supports them (no input, not draggable)
       const lead = r.fixed ? `<span class="fixed">${r.fixed}</span>` :
-        `<div class="lead"><div class="slider" data-k="${k}"><i class="tr"></i><i class="fl"></i><i class="th"></i><input type="range" min="5" max="60" step="5"></div><span class="lv num"><b></b><small>秒</small></span></div>`;
-      return `<div class="rr" data-k="${k}">${ic}<div><div class="n">${r.n}</div><div class="s">${r.s}</div></div><i class="sw" role="switch"></i>${lead}</div>`;
+        `<div class="lead locked" aria-disabled="true" title="提醒引擎接入后可调"><div class="slider dis" data-k="${k}"><i class="tr"></i><i class="fl"></i><i class="th"></i></div><span class="lv num"><b></b><small>秒</small></span></div>`;
+      const pend = pending.has(k);
+      const tag = pend ? '<span class="soon-tag">即将上线</span>' : '';
+      return `<div class="rr${pend ? ' pending' : ''}" data-k="${k}">${ic}<div><div class="n">${r.n}${tag}</div><div class="s">${r.s}</div></div><i class="sw${pend ? ' dis pend' : ''}" role="switch"${pend ? ' aria-disabled="true" title="这条提醒还在做"' : ''}></i>${lead}</div>`;
     }).join('');
     for (const [k, r] of Object.entries(ROWS)) if (r.item) setIcon($('#it-' + k), 'items', r.item, r.label).then(() => { const el = $('#it-' + k); if (el.classList.contains('txt')) { el.textContent = ''; el.classList.remove('txt'); } });
     box.querySelectorAll('.rr').forEach(row => {
       const k = row.dataset.k;
-      row.querySelector('.sw').onclick = () => save({ reminder: k, on: !S.ui.reminders[k].on });
-      const sl = row.querySelector('.slider');
-      if (sl) {
-        const inp = sl.querySelector('input');
-        inp.oninput = () => { setSlider(sl, (inp.value - 5) / 55 * 100); row.querySelector('.lv b').textContent = inp.value; };
-        inp.onchange = () => save({ reminder: k, lead: +inp.value });
-      }
+      row.querySelector('.sw').onclick = pending.has(k)
+        ? () => toast('这条提醒还在做', { icon: 'info' })
+        : () => save({ reminder: k, on: !S.ui.reminders[k].on });
     });
   }
   box.querySelectorAll('.rr').forEach(row => {
     const k = row.dataset.k, v = ui.reminders[k];
-    row.classList.toggle('off', !v.on); row.querySelector('.sw').classList.toggle('on', v.on);
+    const on = v.on && !pending.has(k);
+    row.classList.toggle('off', !on); row.querySelector('.sw').classList.toggle('on', on);
     const sl = row.querySelector('.slider');
-    if (sl && v.lead != null) {
-      sl.classList.toggle('dis', !v.on);
-      const inp = sl.querySelector('input'); if (document.activeElement !== inp) inp.value = v.lead;
-      setSlider(sl, (v.lead - 5) / 55 * 100); row.querySelector('.lv b').textContent = v.lead;
-    }
+    if (sl && v.lead != null) { setSlider(sl, (v.lead - 5) / 55 * 100); row.querySelector('.lv b').textContent = v.lead; }
   });
 }
 
@@ -75,7 +73,7 @@ function renderCoach(s) {
   $('#key-line').textContent = `${k.key_env}=你的Key`;
   $('#btn-apply').style.display = k.docs ? '' : 'none';
   const t = s.last_test || {};
-  $('#test-res').innerHTML = t.ok === undefined
+  if (!testing) $('#test-res').innerHTML = t.ok === undefined
     ? '<span class="pill mute">还没测试</span><span class="hint">点“测试”发一条很短的请求试试</span>'
     : t.ok ? `<span class="pill ok">连接正常</span><span class="t2">用时 <b class="num" style="font-size:15px">${(t.ms / 1000).toFixed(1)}</b> 秒</span>`
       : `<span class="pill err">没连上</span><span class="t2">${esc(t.reason_zh)}</span>`;
@@ -126,6 +124,17 @@ function renderAdv(s) {
   $('#ver-side').textContent = `v${s.version} 预览版`; $('#ver-about').textContent = `v${s.version} 预览版`;
 }
 
+// One minimal request; the result is shown inline in the 上次测试 row (no toast).
+async function runTest() {
+  if (testing) return;
+  testing = true;
+  const b = $('#btn-test'); b.classList.add('busy'); b.textContent = '测试中…';
+  $('#test-res').innerHTML = '<span class="pill mute"><span class="dot"></span>测试中…</span><span class="hint">发一条很短的请求</span>';
+  try { await api().test_key(); }
+  catch (e) { /* result comes back via settings_state().last_test */ }
+  finally { testing = false; b.classList.remove('busy'); b.textContent = '测试'; await refresh(); }
+}
+
 async function refresh() {
   S = await api().settings_state();
   renderRem(S); renderCoach(S); renderOverlay(S); renderAdv(S);
@@ -149,14 +158,11 @@ onReady(async () => {
     const act = b.dataset.act;
     if (act === 'reload_env') {
       const r = await api().reload_env(); await refresh();
-      toast(r.key.configured ? '已重新读取 .env，教练 Key 已配置' : `还是没读到 Key，检查 .env 里有没有 ${r.key.key_env}=…`, { icon: r.key.configured ? 'check' : 'alert' });
+      if (r.key.configured) runTest();  // found a key: test it once, result shows in the 上次测试 row
+      else toast(`还是没读到 Key，检查 .env 里有没有 ${r.key.key_env}=…`, { icon: 'alert' });
     } else if (!(await api()[act]())) toast('没能打开文件夹，详情见日志', { icon: 'alert' });
   });
-  $('#btn-test').onclick = async () => {
-    const b = $('#btn-test'); b.classList.add('busy'); b.textContent = '测试中…';
-    try { const r = await api().test_key(); toast(r.ok ? '连接正常' : r.reason_zh, { icon: r.ok ? 'check' : 'alert' }); }
-    finally { b.classList.remove('busy'); b.textContent = '测试'; await refresh(); }
-  };
+  $('#btn-test').onclick = runTest;
   $('#btn-apply').onclick = () => api().open_key_page();
   $('#prov').onclick = () => toast('换服务商的下拉还在做，现在先在 .env 里改');
   // voice

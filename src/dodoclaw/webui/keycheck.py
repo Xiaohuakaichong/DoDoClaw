@@ -100,6 +100,7 @@ def test_key(
     *,
     client_factory: Callable[..., Any] | None = None,
     timeout: float = 15.0,
+    extra_body: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """One tiny chat completion. Returns {ok, reason_zh, ms} — never the key."""
     if not (api_key or "").strip():
@@ -113,6 +114,7 @@ def test_key(
             model=model,
             messages=[{"role": "user", "content": "1"}],
             max_tokens=8,
+            extra_body=extra_body or None,
         )
     except Exception as exc:
         # class name + status only; exception text can echo part of the key

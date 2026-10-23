@@ -1,0 +1,69 @@
+# DoDoClaw 新用户默认配置模板（首次运行复制为 config/settings.yaml；已有的不会被覆盖）
+# DoDoClaw default settings (overridden by env / .env)
+
+gsi:
+  host: "127.0.0.1"
+  port: 3000
+  auth_token: "dodoclaw_secret"
+
+coach:
+  language: "zh-CN"
+  # LLM provider id — see dodoclaw.providers.PROVIDERS
+  # CN: deepseek | stepfun_plan | stepfun | dashscope | zhipu | moonshot | siliconflow | volcengine | …
+  # 默认 DeepSeek：模型 deepseek-flash，关闭思考模式（代码里自动带 thinking: disabled）
+  provider: "deepseek"
+  # Optional overrides (empty = use provider defaults / .env)
+  # base_url: "https://api.deepseek.com"
+  # model: "deepseek-flash"
+  max_reply_chars: 400
+  system_style: |
+    你是 DoDoClaw，一名简洁、实战向的 Dota 2 语音教练。
+    结合 GSI 局势、Meta 与知识库（英雄机制/官方补丁）作答。
+    涉及技能与补丁数值时以知识库为准，勿与补丁冲突地编造。
+    优先可执行建议；口语化中文。
+
+# 英雄机制 + 官方补丁知识库（OpenDota constants + Valve patchnotes）
+knowledge:
+  enabled: true
+  language: "schinese"   # schinese | english
+  patch_last_n: 3        # 最近 N 个补丁
+  ttl_sec: 86400         # 缓存 24h 后自动再同步
+  top_k: 6
+  max_chars: 2800
+  # 本地索引: data/knowledge/index.json
+  # CLI: python -m dodoclaw knowledge-sync
+
+# BP / Meta — OpenDota (no token) and/or STRATZ (user token)
+meta:
+  enabled: true
+  # auto: STRATZ if STRATZ_API_TOKEN set, else OpenDota
+  source: "auto"          # auto | opendota | stratz
+  cache_ttl_sec: 21600    # 6h local cache under data/meta/
+  fallback_opendota: true # STRATZ 失败时回退 OpenDota
+  opendota_bracket: 0     # 0=all ranks 1-8, or 1..8 single bracket
+  stratz_bracket: "high"  # all|low|mid|high|divine_immortal|legend_ancient|...
+  # Tokens live in .env: OPENDOTA_API_KEY, STRATZ_API_TOKEN
+
+reminders:
+  enabled: true
+  # Game clock reminders (minutes:seconds style handled in code)
+  rune_spawn_interval_sec: 120   # power runes every 2 min (post 7.x baseline)
+  bounty_rune_interval_sec: 180  # bounty / water typically 3 min early
+  announce_buyback_ready: true
+  announce_ult_ready: false
+  # Cooldown (real seconds) between repeating the same reminder key
+  cooldown_sec: 25
+
+voice:
+  # ASR: mock | whisper | stepfun_plan | stepfun
+  stt_backend: "mock"
+  # stt_model: "stepaudio-2.5-asr"
+  # TTS: mock | edge | stepfun_plan | stepfun
+  tts_backend: "mock"
+  # tts_model: "stepaudio-2.5-tts"
+  # tts_voice: "cixingnansheng"
+  sample_rate: 16000
+  record_seconds: 5
+
+logging:
+  level: "INFO"

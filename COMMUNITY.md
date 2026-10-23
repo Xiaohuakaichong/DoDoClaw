@@ -10,7 +10,7 @@
 
 1. 下载并解压 `DoDoClaw-win64.zip`
 2. 双击 **DoDoClaw.exe**
-3. 左侧选择 **LLM Provider**（默认 **阶跃星辰 Step Plan / Coding Plan**，也支持 DeepSeek、通义、智谱、Kimi、硅基流动等）  
+3. 左侧选择 **LLM Provider**（默认 **DeepSeek**，模型 deepseek-flash；也支持阶跃星辰 Step Plan、通义、智谱、Kimi、硅基流动等）  
 4. 填写对应 **API Key** → **保存 Provider 配置**  
 5. 点击 **安装 Dota GSI 配置**（自动写入 Steam 目录）  
 6. **完全退出并重启 Dota 2**（只重开一局有时不够）  

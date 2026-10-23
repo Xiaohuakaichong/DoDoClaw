@@ -29,7 +29,8 @@ class Settings(BaseSettings):
     )
 
     # Unified LLM settings
-    llm_provider: str = Field(default=DEFAULT_PROVIDER_ID, alias="LLM_PROVIDER")
+    # Empty = fall back to coach.provider in settings.yaml, then DEFAULT_PROVIDER_ID
+    llm_provider: str = Field(default="", alias="LLM_PROVIDER")
     llm_api_key: str = Field(default="", alias="LLM_API_KEY")
     llm_base_url: str = Field(default="", alias="LLM_BASE_URL")
     llm_model: str = Field(default="", alias="LLM_MODEL")
@@ -103,6 +104,7 @@ class Settings(BaseSettings):
             (not self.llm_provider or self.llm_provider == DEFAULT_PROVIDER_ID)
             and not self.llm_api_key
             and not self.stepfun_api_key
+            and not self.deepseek_api_key
             and self.xai_api_key
             and not yaml_coach.get("provider")
         ):

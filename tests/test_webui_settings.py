@@ -20,35 +20,62 @@ SECRET = "sk-test-SHOULD-NEVER-LEAK-1234567890"
 
 
 # ── reminder defaults (domain/reminder-budget.md) ───────
-@pytest.mark.parametrize("pos,count", [([1], 16), ([2], 26), ([3], 16), ([4], 22), ([5], 22)])
-def test_budget_per_position_matches_reminder_budget(pos, count):
+# Rows without an engine rule (神龛/魔方/肉山/不朽盾/TP) are off and not counted.
+@pytest.mark.parametrize("pos,count", [([1], 3), ([2], 13), ([3], 3), ([4], 9), ([5], 9), ([1, 2, 3, 4, 5], 19)])
+def test_budget_per_position(pos, count):
     assert st.budget(st.defaults(pos)["reminders"]) == count
 
 
-def test_bounty_only_45_runes_only_2():
+def test_defaults_stay_under_cap():
+    for pos in ([1], [2], [3], [4], [5], [1, 2, 3, 4, 5]):
+        assert st.budget(st.defaults(pos)["reminders"]) <= st.BUDGET_CAP
+
+
+def test_bounty_only_45_runes_only_2_lowhp_off():
     for p in (1, 2, 3, 4, 5):
         rem = st.defaults([p])["reminders"]
         assert rem["bounty"]["on"] is (p in (4, 5))
         assert rem["runes"]["on"] is (p == 2)
-        assert rem["lowhp"]["on"] is False
+        assert rem["lowhp"]["on"] is False  # PRD 3.C1: off by default
+        assert rem["buyback"]["on"] is True
+
+
+def test_pending_rows_off_uncounted_and_locked():
+    cur = st.defaults([2])
+    for k in st.PENDING:
+        assert cur["reminders"][k]["on"] is False
+        new, err = st.toggle_reminder(cur, k, True)
+        assert err == "这条提醒还在做" and new is cur
+    forced = st.merge({"reminders": {k: {"on": True} for k in st.PENDING}, "overrides": list(st.PENDING)})
+    assert all(forced["reminders"][k]["on"] is False for k in st.PENDING)
+    assert forced["overrides"] == []
+    on_all = {k: {"on": True} for k in st.REMINDERS}
+    assert st.budget(on_all) == 6 + 10 + 3  # pending rows (and lowhp) never counted
 
 
 def test_position_change_keeps_manual_overrides():
     cur = st.defaults([1])
-    cur, err = st.toggle_reminder(cur, "shrine", False)
+    cur, err = st.toggle_reminder(cur, "buyback", False)
     assert not err
     cur = st.apply_positions(cur, [4])
     assert cur["reminders"]["bounty"]["on"] is True
-    assert cur["reminders"]["shrine"]["on"] is False  # user's choice survives
+    assert cur["reminders"]["buyback"]["on"] is False  # user's choice survives
 
 
-def test_toggle_over_cap_is_refused():
-    cur = st.apply_positions(st.defaults([2]), [2, 4])  # 26 + 6 = 32 via defaults
-    cur, _ = st.toggle_reminder(cur, "bounty", False)
-    cur, _ = st.toggle_reminder(cur, "shrine", False)  # 21
-    cur, _ = st.toggle_reminder(cur, "shrine", True)  # 26
-    new, err = st.toggle_reminder(cur, "bounty", True)  # would be 32
-    assert err and new is cur
+def test_cap_warns_but_never_blocks(monkeypatch):
+    monkeypatch.setattr(st, "BUDGET_CAP", 10)
+    cur = st.defaults([2])  # 13 > 10
+    cur, _ = st.toggle_reminder(cur, "runes", False)  # 3
+    new, err = st.toggle_reminder(cur, "runes", True)
+    assert err == "" and new["reminders"]["runes"]["on"] is True
+    new, err = st.toggle_reminder(new, "bounty", True)
+    assert err == "" and st.budget(new["reminders"]) == 19 > st.BUDGET_CAP
+    assert "超过建议的 30 条" in st.OVER_CAP_HINT
+
+
+def test_saved_lead_is_ignored():
+    out = st.merge({"reminders": {"bounty": {"on": True, "lead": 45}}})
+    assert out["reminders"]["bounty"]["lead"] == st.REMINDERS["bounty"][1]
 
 
 def test_lead_is_clamped():
@@ -154,9 +181,13 @@ def _resp(code):
 
 def test_test_key_ok_minimal_request():
     calls: list = []
-    r = keycheck.test_key(SECRET, "https://api.example.com", "m", client_factory=_factory(calls=calls))
+    r = keycheck.test_key(
+        SECRET, "https://api.example.com", "m", client_factory=_factory(calls=calls),
+        extra_body={"thinking": {"type": "disabled"}},
+    )
     assert r["ok"] is True and r["reason_zh"] == "连接正常"
     assert calls[0]["max_tokens"] <= 8 and len(calls[0]["messages"]) == 1
+    assert calls[0]["extra_body"] == {"thinking": {"type": "disabled"}}
 
 
 @pytest.mark.parametrize(
@@ -201,3 +232,38 @@ def test_bridge_test_key_uses_mocked_client(envfile, monkeypatch, caplog):
     assert r == {"ok": False, "reason_zh": "Key 无效或没有权限", "ms": None}
     assert SECRET not in json.dumps(b._last_test) and SECRET not in caplog.text
     assert envfile.read_bytes() == before
+
+
+def _bridge_for_save(tmp_path):
+    b = Bridge.__new__(Bridge)
+    b.ui = st.defaults([2])
+    b._ui_path = tmp_path / "settings.yaml"
+    b._ui_path.write_text("# keep\n", encoding="utf-8")
+    return b
+
+
+def test_bridge_save_ignores_lead_and_refuses_pending(tmp_path):
+    b = _bridge_for_save(tmp_path)
+    r = b.save_settings({"reminder": "bounty", "lead": 45})
+    assert r["ok"] and b.ui["reminders"]["bounty"]["lead"] == 15
+    assert st.load(b._ui_path)["reminders"]["bounty"]["lead"] == 15
+    r = b.save_settings({"reminder": "roshan", "on": True})
+    assert r == {"ok": False, "msg": "这条提醒还在做"} and b.ui["reminders"]["roshan"]["on"] is False
+    r = b.save_settings({"positions": [1, 2, 3, 4, 5]})
+    assert r["ok"]
+
+
+def test_bridge_test_key_sends_thinking_off_for_deepseek(envfile, monkeypatch):
+    seen = {}
+
+    class C(_Client):
+        def _create(self, **kw):
+            seen.update(kw)
+            return SimpleNamespace(choices=[])
+
+    monkeypatch.setattr(openai, "OpenAI", lambda **kw: C())
+    b = _fake_bridge(envfile)
+    b._svc.coach.model = "deepseek-flash"
+    b.reload_env()
+    assert b.test_key()["ok"] is True
+    assert seen["extra_body"] == {"thinking": {"type": "disabled"}} and seen["model"] == "deepseek-flash"

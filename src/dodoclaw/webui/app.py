@@ -356,6 +356,8 @@ class Bridge:
             "ui": self.ui,
             "budget": settings_store.budget(self.ui["reminders"]),
             "budget_cap": settings_store.BUDGET_CAP,
+            "over_cap_hint": settings_store.OVER_CAP_HINT,
+            "pending": sorted(settings_store.PENDING),
             "key": key,
             "last_test": self._last_test,
             "voice": {
@@ -396,8 +398,7 @@ class Bridge:
             row = str(patch["reminder"])
             if "on" in patch:
                 self.ui, msg = settings_store.toggle_reminder(self.ui, row, bool(patch["on"]))
-            if "lead" in patch and self.ui["reminders"].get(row, {}).get("lead") is not None:
-                self.ui["reminders"][row]["lead"] = settings_store.clamp_lead(patch["lead"])
+            # "lead" is ignored: lead times are not editable until the engine supports them
         if "overlay_opacity" in patch:
             self.ui["overlay_opacity"] = max(40, min(100, int(patch["overlay_opacity"])))
         if "auto_overlay" in patch:
@@ -442,10 +443,13 @@ class Bridge:
         return {"key": self._key_status(), "keys": keycheck.env_flags()}
 
     def test_key(self) -> dict[str, Any]:
+        from dodoclaw.providers import chat_extra_body
         from dodoclaw.webui import keycheck
 
         c = self._svc.coach
-        res = keycheck.test_key(c.api_key or "", c.base_url, c.model)
+        res = keycheck.test_key(
+            c.api_key or "", c.base_url, c.model, extra_body=chat_extra_body(self._svc.provider_id, c.model)
+        )
         self._last_test = {**res, "at": time.time()}
         return res
 
