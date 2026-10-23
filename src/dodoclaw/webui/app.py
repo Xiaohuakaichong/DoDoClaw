@@ -720,6 +720,13 @@ def run_webui(debug: bool = False) -> int:
 
     def _started() -> None:
         threading.Thread(target=bridge._watch, name="overlay-watch", daemon=True).start()
+        # If the window thread ever stops answering, dump every thread's stack to
+        # logs/hang.log next to the exe (so a freeze on a user's PC is diagnosable).
+        from dodoclaw.paths import app_dir
+        from dodoclaw.webui import winshape
+        from dodoclaw.webui.hangwatch import HangWatch
+
+        HangWatch(app_dir() / "logs" / "hang.log", lambda: winshape.hwnd_of(bridge._main_win)).start()
 
     webview.start(_started, gui="edgechromium" if os.name == "nt" else None,
                   http_server=True, debug=debug)
