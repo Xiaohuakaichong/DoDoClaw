@@ -217,3 +217,13 @@ def test_no_overlay_opacity_control_d11():
     ov = (webapp.STATIC / "overlay.js").read_text(encoding="utf-8")
     assert "不透明度" not in html and "透明度" not in html and 'id="sl-op"' not in html
     assert "overlay_opacity" not in js and "ov_opacity" not in ov
+
+
+def test_inner_overlay_radii_are_smaller_than_the_window_corner():
+    import re
+
+    html = (webapp.STATIC / "overlay.html").read_text(encoding="utf-8")
+    for sel in (".ib{", ".ans{", ".in .f{", ".in .mic{", ".alert{", ".soft{", ".in input{"):
+        rule = html.split(sel, 1)[1].split("}", 1)[0]
+        assert re.search(r"border-radius:6px", rule), sel
+    assert winshape.RADIUS == 8
