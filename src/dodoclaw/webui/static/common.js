@@ -27,3 +27,37 @@ function poll(fn, ms) {
   return () => { stop = true; };
 }
 function applyMotion(s) { document.documentElement.classList.toggle('reduce-motion', !!s.reduce_motion); }
+// Settings sections (anchors on settings.html) used by every "缺配置" hint.
+const SET = { rem: 'settings.html#rem', coach: 'settings.html#coach', voice: 'settings.html#voice', overlay: 'settings.html#overlay', adv: 'settings.html#adv', about: 'settings.html#about' };
+// Glass toast above the ask bar, 2.5 s. o.href adds a "去设置 →" link; hovering keeps it open.
+function toast(msg, o) {
+  o = o || {}; const t = $('#toast'); if (!t) return;
+  t.classList.add('toast');
+  t.innerHTML = `<span class="ti"><svg class="ico"><use href="#${o.icon || 'info'}"/></svg></span><span>${esc(msg)}</span>` +
+    (o.href ? `<a class="link" href="${o.href}">${esc(o.action || '去设置')} →</a>` : '');
+  const hide = () => { clearTimeout(t._t); t._t = setTimeout(() => t.classList.remove('on'), o.ms || 2500); };
+  t.onmouseenter = () => clearTimeout(t._t); t.onmouseleave = hide;
+  t.classList.add('on'); clearTimeout(t._t); if (!o.sticky) hide();
+}
+function chip(el, cls, text) { if (el) el.innerHTML = `<span class="dot ${cls}"></span>${esc(text)}`; }
+// Title-bar status chips shared by every main-window page.
+function renderTopbar(s) {
+  const g = s.gsi;
+  chip($('#chip-gsi'), g.online ? 'ok' : 'warn', g.online ? 'Dota 已连接' : '等待 Dota');
+  chip($('#chip-coach'), s.coach.key_ok ? 'ok' : 'warn', s.coach.key_ok ? `教练 · ${s.coach.provider}` : '教练 · 未配置');
+  const ttsOff = s.voice.tts === 'mock';
+  const v = $('#chip-voice');
+  if (v) { v.querySelector('span').textContent = ttsOff ? '播报 · 未配置' : '播报'; v.classList.toggle('off', ttsOff);
+    v.querySelector('use').setAttribute('href', ttsOff ? '#vol-off' : '#vol'); v.title = ttsOff ? '去设置配置播报' : `播报 · ${s.voice.tts_zh}`; }
+}
+// Window buttons, chips and rail entries. Nothing here is a dead click.
+function wireChrome(getState) {
+  const on = (sel, fn) => { const el = $(sel); if (el) el.onclick = fn; };
+  on('#btn-min', () => api().minimize());
+  on('#btn-close', () => api().close());
+  on('#btn-ov', () => api().toggle_overlay());
+  on('#chip-gsi', () => { location.href = SET.adv; });
+  on('#chip-coach', () => { const s = getState(); if (s && !s.coach.key_ok) toast('教练还没配 Key，提醒照常工作', { icon: 'alert', href: SET.coach }); else location.href = SET.coach; });
+  on('#chip-voice', () => { const s = getState(); if (s && s.voice.tts === 'mock') toast('还没配语音播报，提醒先只在小窗显示', { icon: 'alert', href: SET.voice }); else location.href = SET.voice; });
+  document.querySelectorAll('.rail a.soon').forEach(a => a.onclick = () => toast('这个页面还在做，先用首页'));
+}

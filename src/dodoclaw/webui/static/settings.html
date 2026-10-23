@@ -1,0 +1,267 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><title>DoDoClaw · 设置</title>
+<link rel="stylesheet" href="tokens.css"><link rel="stylesheet" href="shell.css">
+<style>
+.page{display:grid;grid-template-columns:184px 1fr;gap:16px}
+.snav{padding:14px 10px;display:flex;flex-direction:column;gap:2px}
+.snav .label{padding:4px 10px 10px}
+.snav a{display:flex;align-items:center;gap:10px;height:40px;padding:0 12px;border-radius:10px;color:var(--text-2);font-size:13.5px;cursor:pointer;position:relative}
+.snav a .ico{width:16px;height:16px;color:var(--text-3)}
+.snav a:hover{background:rgba(255,255,255,.04)}
+.snav a.on{background:rgba(255,255,255,.06);color:#fff;box-shadow:inset 0 0 0 1px var(--line-2)}
+.snav a.on .ico{color:var(--brand-2)}
+.snav a .pill{margin-left:auto;height:18px;padding:0 6px;font-size:10px}
+.snav .ver{margin-top:auto;padding:10px 12px 2px;font-size:11px;color:var(--text-3);line-height:1.6}
+.pane{display:none;flex-direction:column;min-height:0;min-width:0;padding:20px 22px}.row .v>.mono{flex:1;min-width:0}
+.pane.on{display:flex}
+.ptop{display:flex;align-items:flex-end;gap:12px;margin-bottom:12px}
+.ptop .saved{margin-left:auto;font-size:12px;color:var(--ok);display:flex;align-items:center;gap:5px}
+.ptop .saved .ico{width:14px;height:14px}
+.card{border-radius:12px;background:linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,.012));border:1px solid var(--line);padding:14px 16px}
+.card+.card{margin-top:12px}
+.ch{display:flex;align-items:center;gap:10px}
+.ch .t{font-weight:800;font-size:14px}.ch .d{font-size:12px;color:var(--text-3)}
+.ch .r{margin-left:auto;display:flex;gap:8px;align-items:center}
+.gi{width:34px;height:34px}
+.row{display:flex;align-items:center;gap:12px;min-height:48px;padding:6px 0;border-top:1px solid var(--line)}
+.row:first-child{border-top:0}
+.row .k{width:132px;flex:none;font-size:13px;color:var(--text-2)}
+.row .v{flex:1;display:flex;align-items:center;gap:10px;min-width:0;font-size:13px}
+.row .end{margin-left:auto;display:flex;gap:8px;align-items:center}
+.hint{font-size:11.5px;color:var(--text-3);line-height:1.55}
+/* 提醒 */
+.posbar{display:flex;align-items:center;gap:16px;padding:12px 16px}.seg span{white-space:nowrap}
+.budget{white-space:nowrap;margin-left:auto;display:flex;align-items:center;gap:12px}
+.budget .n{font:700 26px var(--num);line-height:1}.budget .n small{font:600 13px var(--num);color:var(--text-3);margin-left:2px}
+.meter{width:150px;height:6px;border-radius:3px;background:rgba(255,255,255,.08);position:relative;overflow:hidden}
+.meter i{position:absolute;left:0;top:0;bottom:0;border-radius:3px;background:var(--brand-grad)}
+.rtable{flex:1;min-height:0;margin-top:12px}
+.rh,.rr{display:grid;grid-template-columns:34px 1fr 48px 236px;align-items:center;gap:12px}
+.rh{font-size:11px;letter-spacing:1px;color:var(--text-3);font-weight:700;padding:0 12px 6px}
+.rr{height:41px;padding:0 12px;border-radius:10px}
+.rr:nth-child(odd){background:rgba(255,255,255,.022)}
+.rr .gl{width:30px;height:30px}.rr .gl .ico{width:16px;height:16px}
+.rr .it{width:30px;height:30px;border-radius:8px}
+.rr .n{font-weight:700;font-size:13px;line-height:1.25}.rr .s{font-size:11px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rr .lead{display:flex;align-items:center;gap:12px}
+.rr .lv{width:44px;text-align:right;font:600 16px var(--num)}.rr .lv small{font:400 11px var(--font);color:var(--text-3);margin-left:1px}
+.rr .fixed{font-size:11.5px;color:var(--text-3)}
+.rr.off .n,.rr.off .gl,.rr.off .it{opacity:.45}
+.rr .gl.warm{background:rgba(255,138,61,.12);color:var(--brand-2)}.rr .gl.gold{background:rgba(243,194,107,.12);color:var(--gold)}
+.foot{margin-top:10px;font-size:11.5px;color:var(--text-3);display:flex;gap:14px}
+/* 教练 / 语音 */
+.keybox{display:flex;align-items:center;gap:10px;height:38px;padding:0 12px;border-radius:9px;background:rgba(0,0,0,.28);border:1px solid var(--line-2);flex:1}
+.keybox .ico{width:15px;height:15px;color:var(--text-3)}
+.card.warnc{border-color:rgba(255,190,85,.28);background:linear-gradient(135deg,rgba(255,190,85,.08),rgba(255,255,255,.012) 60%)}
+.opt{flex:1;border-radius:10px;border:1px solid var(--line-2);padding:10px 12px;background:rgba(0,0,0,.2);cursor:pointer}
+.opt .t{font-weight:700;font-size:13px;display:flex;align-items:center;gap:6px}.opt .d{font-size:11.5px;color:var(--text-3);margin-top:2px}
+/* 小窗示意 */
+.ovmini{width:212px;height:118px;border-radius:12px;background:rgba(14,17,25,.88);border:1px solid var(--line-2);box-shadow:var(--shadow-2);padding:10px 12px;flex:none;position:relative}
+.ovmini .l1{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-2)}
+.ovmini .big{font:700 30px var(--num);line-height:1;margin-top:8px}
+.ovmini .l2{font-size:11px;color:var(--text-3);margin-top:4px}
+.mono{font:12px Consolas,"Cascadia Mono",monospace;color:var(--text-2);background:rgba(0,0,0,.3);border:1px solid var(--line);border-radius:6px;padding:3px 8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.bignum{font:700 22px var(--num);line-height:1}
+.kv{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.kv>div{border-radius:10px;background:rgba(0,0,0,.22);border:1px solid var(--line);padding:10px 12px}
+.kv .l{font-size:11px;color:var(--text-3);margin-top:4px}
+/* 关于 */
+.about-hero{display:flex;gap:18px;align-items:center}
+.about-hero .logo{width:64px;height:64px;border-radius:18px;font-size:36px}
+.about-hero h3{font:700 28px var(--num);letter-spacing:2px}
+.notice{display:flex;gap:12px;padding:14px 16px;border-radius:12px;background:rgba(98,168,255,.07);border:1px solid rgba(98,168,255,.22)}
+.notice .ico{color:var(--info);margin-top:1px}
+.facts{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.facts .card{margin:0}
+.facts .t{font-weight:800;font-size:13.5px;display:flex;align-items:center;gap:8px}.facts .t .ico{width:16px;height:16px;color:var(--brand-2)}
+.facts p{font-size:12px;color:var(--text-3);margin-top:6px;line-height:1.6}
+/* 实现版补充 */
+.page{padding:6px 24px 24px 8px}
+.rail a{text-decoration:none}
+html:not(.key-none) .k-none,html.key-none .k-env{display:none!important}
+.keybox.warnk{border-color:rgba(255,190,85,.35);background:rgba(255,190,85,.06)}.keybox.warnk .ico{color:var(--warn)}
+.opt.sel{border-color:rgba(255,138,61,.55);background:linear-gradient(135deg,rgba(229,72,47,.12),rgba(0,0,0,.2) 70%);box-shadow:inset 0 0 0 1px rgba(255,138,61,.25)}
+.opt .tag{margin-left:auto}.opt.dis{opacity:.5;pointer-events:none}
+.saved{opacity:0;transition:opacity var(--dur-2)}.saved.on{opacity:1}
+.pane{overflow:auto}.pane::-webkit-scrollbar{width:6px}.pane::-webkit-scrollbar-thumb{background:rgba(255,255,255,.1);border-radius:3px}
+.slider input{position:absolute;inset:-6px 0;width:100%;opacity:0;cursor:pointer;margin:0}
+.slider.dis input{pointer-events:none}
+.budget.over .n{color:var(--warn)}.budget.over .meter i{background:var(--warn)}
+.card.flash{animation:flash 1.2s var(--ease) 1}@keyframes flash{0%{box-shadow:0 0 0 2px rgba(255,138,61,.6)}100%{box-shadow:0 0 0 0 rgba(255,138,61,0)}}
+.btn.busy{opacity:.6;pointer-events:none}
+a.link{text-decoration:none}
+#toast{bottom:28px}
+</style></head>
+<body>
+<svg width="0" height="0" style="position:absolute"><defs>
+<svg width="0" height="0" style="position:absolute"><defs>
+<symbol id="home" viewBox="0 0 24 24"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/></symbol>
+<symbol id="bp" viewBox="0 0 24 24"><path d="M4 4l6 6M10 4L4 10"/><path d="M14 14l6 6M20 14l-6 6"/><path d="M14 4h6v6M4 14h6v6"/></symbol>
+<symbol id="chat" viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/></symbol>
+<symbol id="hist" viewBox="0 0 24 24"><path d="M4 19V9M10 19V5M16 19v-7M22 19H2"/></symbol>
+<symbol id="set" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></symbol>
+<symbol id="mic" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></symbol>
+<symbol id="mic-off" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3M4 4l16 16"/></symbol>
+<symbol id="vol" viewBox="0 0 24 24"><path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11"/></symbol>
+<symbol id="vol-off" viewBox="0 0 24 24"><path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M17 9l5 6M22 9l-5 6"/></symbol>
+<symbol id="send" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+<symbol id="expand" viewBox="0 0 24 24"><path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7"/></symbol>
+<symbol id="min" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
+<symbol id="x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+<symbol id="rune" viewBox="0 0 24 24"><path d="M12 2l7 10-7 10-7-10z"/><path d="M12 7l3.5 5L12 17l-3.5-5z"/></symbol>
+<symbol id="shrine" viewBox="0 0 24 24"><path d="M4 20h16M6 20V10l6-6 6 6v10M10 20v-5h4v5"/></symbol>
+<symbol id="cube" viewBox="0 0 24 24"><path d="M12 2l9 5v10l-9 5-9-5V7z"/><path d="M12 12l9-5M12 12v10M12 12L3 7"/></symbol>
+<symbol id="coin" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v10M9 9.5h4.5a2 2 0 0 1 0 4H10a2 2 0 0 0 0 4h5"/></symbol>
+<symbol id="spark" viewBox="0 0 24 24"><path d="M12 3l2.2 6.8L21 12l-6.8 2.2L12 21l-2.2-6.8L3 12l6.8-2.2z"/></symbol>
+<symbol id="key" viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M17 6l3 3M15 8l2 2"/></symbol>
+<symbol id="check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7"/></symbol>
+<symbol id="plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+<symbol id="search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></symbol>
+<symbol id="alert" viewBox="0 0 24 24"><path d="M12 3l10 18H2z"/><path d="M12 10v4M12 17.5v.5"/></symbol>
+<symbol id="info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></symbol>
+<symbol id="clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+<symbol id="trash" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></symbol>
+<symbol id="stop" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></symbol>
+<symbol id="refresh" viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/></symbol>
+<symbol id="folder" viewBox="0 0 24 24"><path d="M3 6a1 1 0 0 1 1-1h5l2 2h9a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/></symbol>
+<symbol id="shield" viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 4.5-3.4 8.2-8 9-4.6-.8-8-4.5-8-9V6z"/></symbol>
+<symbol id="ban" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/></symbol>
+<symbol id="ext" viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></symbol>
+<symbol id="down" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>
+<symbol id="heart" viewBox="0 0 24 24"><path d="M12 20s-7-4.5-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.5-7 10-7 10z"/></symbol>
+<symbol id="skull" viewBox="0 0 24 24"><path d="M5 11a7 7 0 1 1 14 0v4h-2v4H7v-4H5z"/><circle cx="9.5" cy="11.5" r="1.5"/><circle cx="14.5" cy="11.5" r="1.5"/></symbol>
+<symbol id="layers" viewBox="0 0 24 24"><path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/></symbol>
+<symbol id="motion" viewBox="0 0 24 24"><path d="M3 12h4M5 7h6M5 17h6"/><circle cx="16" cy="12" r="5"/></symbol>
+<symbol id="tp" viewBox="0 0 24 24"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 8h6M9 12h6M9 16h3"/></symbol>
+<symbol id="wave" viewBox="0 0 24 24"><path d="M4 10v4M8 7v10M12 4v16M16 8v8M20 11v2"/></symbol>
+</defs></svg>
+</defs></svg>
+<div class="win">
+ <div class="tb"><div class="drag pywebview-drag-region"><div class="logo">D</div><span class="name">DODOCLAW</span><span class="crumb">/ 设置</span></div>
+  <div class="stat">
+   <span class="chip btnlike" id="chip-gsi"><span class="dot warn"></span>等待 Dota</span>
+   <span class="chip btnlike" id="chip-coach"><span class="dot warn"></span>教练</span>
+   <span class="chip btnlike" id="chip-voice"><svg class="ico" style="width:14px;height:14px"><use href="#vol"/></svg><span>播报</span></span>
+   <span class="chip btnlike" id="btn-ov" title="显示/隐藏对局小窗"><svg class="ico" style="width:14px;height:14px"><use href="#expand"/></svg>小窗</span>
+  </div>
+  <div class="wc"><span id="btn-min"><svg class="ico"><use href="#min"/></svg></span><span class="x" id="btn-close"><svg class="ico"><use href="#x"/></svg></span></div></div>
+ <nav class="rail">
+  <a href="main.html"><svg class="ico"><use href="#home"/></svg>首页</a>
+  <a class="soon" title="还在做"><svg class="ico"><use href="#bp"/></svg>BP</a>
+  <a class="soon" title="还在做"><svg class="ico"><use href="#chat"/></svg>对话</a>
+  <a class="soon" title="还在做"><svg class="ico"><use href="#hist"/></svg>复盘</a>
+  <span class="sp"></span>
+  <a class="on"><svg class="ico"><use href="#set"/></svg>设置</a>
+ </nav>
+<main class="page">
+ <nav class="glass snav">
+  <span class="label">设置</span>
+  <a data-s="rem"><svg class="ico"><use href="#clock"/></svg>提醒</a>
+  <a data-s="coach"><svg class="ico"><use href="#chat"/></svg><span style="white-space:nowrap">教练与语音</span><span class="dot warn k-none" style="margin-left:auto"></span></a>
+  <a data-s="overlay"><svg class="ico"><use href="#layers"/></svg>小窗与动效</a>
+  <a data-s="adv"><svg class="ico"><use href="#key"/></svg>高级</a>
+  <a data-s="about"><svg class="ico"><use href="#info"/></svg>关于</a>
+  <div class="ver"><span id="ver-side">预览版</span><br>只用 Valve 官方 GSI<br>非 Valve 官方软件</div>
+ </nav>
+
+ <!-- ===== 提醒 ===== -->
+ <section class="glass pane" id="p-rem">
+  <div class="ptop"><div><div class="ph1">提醒</div><div class="sub">按常玩位置给默认开关，每类提醒单独调提前量。改动即时保存。</div></div><span class="saved"><svg class="ico"><use href="#check"/></svg>已保存</span></div>
+  <div class="card posbar">
+   <div><div class="label" style="margin-bottom:6px">常玩位置 · 可多选</div>
+    <div class="seg" id="pos"><span data-p="all">全部</span><span class="num" data-p="1">1</span><span class="num" data-p="2">2</span><span class="num" data-p="3">3</span><span class="num" data-p="4">4</span><span class="num" data-p="5">5</span></div></div>
+   <div class="hint" style="max-width:230px">默认值：1/3 号位 16 条，2 号位 26 条，4/5 号位 22 条。改位置会重设默认开关，你手动改过的不动。</div>
+   <div class="budget" id="budget"><div style="text-align:right"><div class="label">预计一局</div><div class="n num"><span id="bud-n">0</span><small>/ <span id="bud-cap">30</span> 条</small></div></div><div class="meter"><i id="bud-bar" style="width:0"></i></div></div>
+  </div>
+  <div class="rtable">
+   <div class="rh"><span></span><span>提醒</span><span>开关</span><span>提前量（5–60 秒）</span></div>
+   <div id="rrows"></div>
+  </div>
+  <div class="foot"><span>暂停时不报</span><span>·</span><span>每局每条只报一次</span><span>·</span><span>同一时刻的提醒合并成一句</span></div>
+ </section>
+
+ <!-- ===== 教练与语音 ===== -->
+ <section class="glass pane" id="p-coach">
+  <div class="ptop"><div><div class="ph1">教练与语音</div><div class="sub">Key 从 exe 同目录的 .env 读取，这里不会显示 Key 本身。</div></div><span class="saved"><svg class="ico"><use href="#check"/></svg>已保存</span></div>
+  <div class="card" id="c-coach">
+   <div class="ch"><span class="gl gi" style="background:rgba(229,72,47,.12);color:var(--brand-2)"><svg class="ico"><use href="#chat"/></svg></span><div><div class="t">AI 教练</div><div class="d">提问和赛后建议要用；不配也能用全部提醒</div></div><div class="r"><span class="pill ok k-env"><span class="dot ok"></span>已配置</span><span class="pill warn k-none"><span class="dot warn"></span>未配置</span></div></div>
+   <div style="margin-top:12px">
+    <div class="row"><span class="k">服务商</span><div class="v"><div class="field btnlike" id="prov" style="width:280px;cursor:pointer"><span id="prov-name">—</span><svg class="ico caret" style="width:14px;height:14px"><use href="#down"/></svg></div><span class="hint">在 .env 里切换服务商</span></div></div>
+    <div class="row k-env"><span class="k">API Key</span><div class="v"><div class="keybox"><svg class="ico"><use href="#key"/></svg><span>已配置</span><span class="muted" style="font-size:12px">· 读取自 .env</span></div><span class="btn ghost sm" id="btn-test">测试</span><span class="btn ghost sm" data-act="open_app_dir"><svg class="ico" style="width:14px;height:14px"><use href="#folder"/></svg>打开文件夹</span><span class="btn ghost sm" data-act="reload_env" title="改完 .env 后点这里"><svg class="ico" style="width:14px;height:14px"><use href="#refresh"/></svg>重新读取</span></div></div>
+    <div class="row k-env"><span class="k">上次测试</span><div class="v" id="test-res"><span class="pill mute">还没测试</span><span class="hint">点“测试”发一条很短的请求试试</span></div></div>
+    <div class="row k-none"><span class="k">API Key</span><div class="v"><div class="keybox warnk"><svg class="ico"><use href="#key"/></svg><span>未配置</span><span class="muted" style="font-size:12px">· 在 exe 同目录的 .env 里填写</span></div><span class="btn primary sm" data-act="open_app_dir"><svg class="ico" style="width:14px;height:14px"><use href="#folder"/></svg>打开文件夹</span><span class="btn ghost sm" data-act="reload_env"><svg class="ico" style="width:14px;height:14px"><use href="#refresh"/></svg>重新读取</span></div></div>
+    <div class="row k-none"><span class="k">怎么填</span><div class="v"><span class="mono" style="flex:none" id="key-line">LLM_API_KEY=你的Key</span><span class="t2" style="white-space:nowrap">加这一行，保存后点“重新读取”，不用重启</span><span class="link" id="btn-apply" style="margin-left:auto;font-size:12px">去申请 <svg class="ico" style="width:12px;height:12px"><use href="#ext"/></svg></span></div></div>
+   </div>
+  </div>
+  <div class="card" id="c-tts">
+   <div class="ch"><span class="gl gi"><svg class="ico"><use href="#vol"/></svg></span><div><div class="t">语音播报</div><div class="d">提醒和回答念出来；Edge 免费声音不需要 Key</div></div><div class="r"><span class="pill" id="tts-pill"></span><i class="sw" id="sw-tts"></i></div></div>
+   <div style="margin-top:8px">
+    <div class="row"><span class="k">声音</span><div class="v"><div class="field" style="width:280px" id="tts-name">—</div><span class="btn ghost sm" id="btn-preview"><svg class="ico" style="width:14px;height:14px"><use href="#vol"/></svg>试听</span></div></div>
+   </div>
+  </div>
+  <div class="card" id="c-voice">
+   <div class="ch"><span class="gl gi" id="ask-ico" style="background:rgba(255,255,255,.05);color:var(--text-3)"><svg class="ico"><use href="#mic-off"/></svg></span><div><div class="t">语音提问（语音识别）</div><div class="d">默认关闭。教练服务商自带识别（如阶跃）时默认云端识别、共用 Key；不带（如 DeepSeek）默认本地 Whisper</div></div><div class="r"><span class="pill mute" id="ask-pill">未配置语音识别</span><i class="sw" id="sw-ask"></i></div></div>
+   <div style="display:flex;gap:10px;margin-top:12px">
+    <div class="opt" id="opt-local" data-m="local"><div class="t"><svg class="ico" style="width:15px;height:15px;color:var(--ok)"><use href="#folder"/></svg>本地 Whisper<span class="tag" id="tag-local"></span></div><div class="d" id="d-local">离线可用，首次下载约 150 MB</div></div>
+    <div class="opt" id="opt-cloud" data-m="cloud"><div class="t"><svg class="ico" style="width:15px;height:15px;color:var(--info)"><use href="#spark"/></svg>云端识别<span class="tag" id="tag-cloud"></span></div><div class="d" id="d-cloud">—</div></div>
+    <div style="display:flex;flex-direction:column;justify-content:center;gap:6px;width:170px"><span class="hint">全局按住说话快捷键</span><div class="field" style="height:32px"><span class="ph">未设置</span><span class="link" id="btn-hotkey" style="margin-left:auto;font-size:12px">设置</span></div></div>
+   </div>
+  </div>
+ </section>
+
+ <!-- ===== 小窗与动效 ===== -->
+ <section class="glass pane" id="p-overlay">
+  <div class="ptop"><div><div class="ph1">小窗与动效</div><div class="sub">对局中的置顶小窗。Dota 要用“无边框窗口”模式，独占全屏时小窗盖不上去，但播报照常。</div></div><span class="saved"><svg class="ico"><use href="#check"/></svg>已保存</span></div>
+  <div class="card" style="display:flex;gap:20px;align-items:center">
+   <div class="ovmini" id="ovmini"><div class="l1"><span class="dot ok"></span>14:27<span style="margin-left:auto">肉山</span></div><div class="big" style="color:var(--brand-2)">0:22</div><div class="l2">肉山快复活了</div></div>
+   <div style="flex:1">
+    <div class="row"><span class="k">不透明度</span><div class="v"><div class="slider" id="sl-op"><i class="tr"></i><i class="fl"></i><i class="th"></i><input type="range" min="40" max="100" step="2"></div><span class="num" id="op-v" style="width:44px;text-align:right;font-size:16px">88%</span></div></div>
+    <div class="row"><span class="k">位置</span><div class="v"><span class="t2">拖动小窗顶部可以挪位置</span><span class="btn ghost sm" id="btn-ovpos" style="margin-left:auto">恢复默认位置</span></div></div>
+   </div>
+  </div>
+  <div class="card">
+   <div class="row"><span class="k">进入对局时</span><div class="v"><span class="t2">自动显示小窗，对局结束自动收起</span><i class="sw" id="sw-auto" style="margin-left:auto"></i></div></div>
+  </div>
+  <div class="card">
+   <div class="ch"><span class="gl gi"><svg class="ico"><use href="#motion"/></svg></span><div><div class="t">减少动效</div><div class="d">关掉波形、光晕、过渡动画，倒计时只换数字。电脑带不动 Dota 时建议打开。</div></div><div class="r"><i class="sw" id="sw-rm"></i></div></div>
+   <div class="hint" style="margin-top:10px;padding-left:44px">主窗口和小窗同步生效。动效开着时，对局中帧率影响不超过 3%。</div>
+  </div>
+ </section>
+
+ <!-- ===== 高级 ===== -->
+ <section class="glass pane" id="p-adv">
+  <div class="ptop"><div><div class="ph1">高级</div><div class="sub">排查连接问题用。一般不用动。</div></div></div>
+  <div class="card">
+   <div class="ch"><span class="gl gi" style="background:rgba(63,220,151,.1);color:var(--ok)"><svg class="ico"><use href="#spark"/></svg></span><div><div class="t">GSI 连接</div><div class="d">Valve 官方 Game State Integration，只在本机收数据</div></div><div class="r"><span class="pill" id="adv-pill"></span></div></div>
+   <div class="kv" style="margin-top:12px">
+    <div><div class="bignum num" id="adv-updates">0</div><div class="l">本次已收数据包</div></div>
+    <div><div class="bignum num" id="adv-age">—</div><div class="l">最近一条</div></div>
+    <div><div class="bignum num" id="adv-port">3000</div><div class="l" id="adv-host">端口 · 127.0.0.1</div></div>
+    <div><div class="bignum num" id="adv-token">已设置</div><div class="l">校验 token（不显示）</div></div>
+   </div>
+   <div class="row" style="margin-top:8px"><span class="k">配置文件</span><div class="v"><span class="mono" id="adv-cfg">没找到 Dota 目录</span><span class="btn ghost sm" style="flex:none;margin-left:auto" id="btn-cfg">重新写入</span></div></div>
+   <div class="row"><span class="k">端口</span><div class="v"><span class="t2">被别的程序占用时换一个，会同时改写配置文件，需要重启 Dota</span><span class="btn ghost sm" style="margin-left:auto" id="btn-port">换端口</span></div></div>
+   <div class="row"><span class="k">录制 GSI 样本</span><div class="v"><span class="t2">把本局推送存到本机，给开发调提醒用；只对本次运行生效</span><i class="sw" id="sw-rec" style="margin-left:auto"></i></div></div>
+  </div>
+  <div class="card">
+   <div class="row"><span class="k">图标缓存</span><div class="v"><span class="mono" id="adv-icondir" style="max-width:320px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span><span class="t2 num" id="adv-icons" style="font-size:14px">0 个</span><span class="btn ghost sm" style="margin-left:auto" id="btn-icons">清空并重新下载</span></div></div>
+   <div class="row"><span class="k">日志</span><div class="v"><span class="t2">出问题时把日志发给开发者</span><span class="btn ghost sm" style="margin-left:auto" data-act="open_log_dir"><svg class="ico" style="width:14px;height:14px"><use href="#folder"/></svg>打开日志文件夹</span></div></div>
+  </div>
+ </section>
+
+ <!-- ===== 关于 ===== -->
+ <section class="glass pane" id="p-about">
+  <div class="ptop"><div><div class="ph1">关于</div></div></div>
+  <div class="about-hero"><div class="logo">D</div><div><h3>DODOCLAW</h3><div class="sub"><span id="ver-about">预览版</span> · Dota 2 语音教练</div></div><span class="btn ghost sm" style="margin-left:auto" id="btn-update"><svg class="ico" style="width:14px;height:14px"><use href="#refresh"/></svg>检查更新</span></div>
+  <div class="notice" style="margin-top:18px"><svg class="ico"><use href="#info"/></svg><div><div style="font-weight:800">非 Valve 官方软件</div><div class="hint" style="font-size:12.5px;margin-top:2px">DoDoClaw 是社区个人作品，与 Valve Corporation 没有关联，也未获其认可。Dota 2、英雄和物品名称及图标版权归 Valve 所有。</div></div></div>
+  <div class="facts" style="margin-top:14px">
+   <div class="card"><div class="t"><svg class="ico"><use href="#heart"/></svg>免费，没有广告</div><p>不收费、不放广告、不收集账号信息。复盘记录只存在本机。</p></div>
+   <div class="card"><div class="t"><svg class="ico"><use href="#shield"/></svg>只用官方 GSI</div><p>通过 Valve 官方 Game State Integration 读局。不注入、不读内存、不自动操作游戏。</p></div>
+   <div class="card"><div class="t"><svg class="ico"><use href="#layers"/></svg>图标来源</div><p>英雄、物品图标来自 Valve 官方 CDN，首次用到时下载并缓存在本机，不随安装包分发。</p></div>
+   <div class="card"><div class="t"><svg class="ico"><use href="#spark"/></svg>开源组件</div><p>Barlow Condensed 字体（SIL OFL 1.1）、pywebview、Edge TTS 等。</p></div>
+  </div>
+ </section>
+</main>
+<div id="toast"></div>
+</div>
+<script src="common.js"></script><script src="settings.js"></script>
+</body></html>

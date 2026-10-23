@@ -1,0 +1,203 @@
+"""Settings page: reminder defaults/budget, settings.yaml persistence, and the
+.env key helpers (no key leakage, .env never written, no real network)."""
+
+from __future__ import annotations
+
+import json
+import logging
+import os
+from pathlib import Path
+from types import SimpleNamespace
+
+import httpx
+import openai
+import pytest
+
+from dodoclaw.webui import keycheck, settings_store as st
+from dodoclaw.webui.app import Bridge
+
+SECRET = "sk-test-SHOULD-NEVER-LEAK-1234567890"
+
+
+# ── reminder defaults (domain/reminder-budget.md) ───────
+@pytest.mark.parametrize("pos,count", [([1], 16), ([2], 26), ([3], 16), ([4], 22), ([5], 22)])
+def test_budget_per_position_matches_reminder_budget(pos, count):
+    assert st.budget(st.defaults(pos)["reminders"]) == count
+
+
+def test_bounty_only_45_runes_only_2():
+    for p in (1, 2, 3, 4, 5):
+        rem = st.defaults([p])["reminders"]
+        assert rem["bounty"]["on"] is (p in (4, 5))
+        assert rem["runes"]["on"] is (p == 2)
+        assert rem["lowhp"]["on"] is False
+
+
+def test_position_change_keeps_manual_overrides():
+    cur = st.defaults([1])
+    cur, err = st.toggle_reminder(cur, "shrine", False)
+    assert not err
+    cur = st.apply_positions(cur, [4])
+    assert cur["reminders"]["bounty"]["on"] is True
+    assert cur["reminders"]["shrine"]["on"] is False  # user's choice survives
+
+
+def test_toggle_over_cap_is_refused():
+    cur = st.apply_positions(st.defaults([2]), [2, 4])  # 26 + 6 = 32 via defaults
+    cur, _ = st.toggle_reminder(cur, "bounty", False)
+    cur, _ = st.toggle_reminder(cur, "shrine", False)  # 21
+    cur, _ = st.toggle_reminder(cur, "shrine", True)  # 26
+    new, err = st.toggle_reminder(cur, "bounty", True)  # would be 32
+    assert err and new is cur
+
+
+def test_lead_is_clamped():
+    assert st.clamp_lead(2) == 5 and st.clamp_lead(99) == 60 and st.clamp_lead(17) == 15
+
+
+def test_save_only_touches_ui_block(tmp_path: Path):
+    p = tmp_path / "settings.yaml"
+    original = "# top comment\ngsi:\n  port: 3000  # keep me\n\nvoice:\n  stt_backend: \"mock\"\n"
+    p.write_text(original, encoding="utf-8")
+    s = st.defaults([2])
+    st.save(p, s)
+    st.save(p, st.apply_positions(s, [5]))
+    text = p.read_text(encoding="utf-8")
+    assert text.startswith(original.rstrip("\n"))
+    assert "# keep me" in text and text.count("\nui:") == 1
+    loaded = st.load(p)
+    assert loaded["positions"] == [5] and loaded["reminders"]["bounty"]["on"] is True
+
+
+def test_save_replaces_block_in_the_middle(tmp_path: Path):
+    p = tmp_path / "settings.yaml"
+    p.write_text("a: 1\nui:\n  positions: [1]\n\n# next\nlogging:\n  level: INFO\n", encoding="utf-8")
+    st.save(p, st.defaults([3]))
+    text = p.read_text(encoding="utf-8")
+    assert "logging:\n  level: INFO" in text and "# next" in text and text.count("ui:") == 1
+    assert st.load(p)["positions"] == [3]
+
+
+# ── .env helpers ───────────────────────────────────────
+@pytest.fixture
+def envfile(tmp_path, monkeypatch):
+    for k in keycheck.KEY_ENVS:
+        monkeypatch.delenv(k, raising=False)
+    p = tmp_path / ".env"
+    p.write_text(f"LLM_PROVIDER=deepseek\nDEEPSEEK_API_KEY={SECRET}\n", encoding="utf-8")
+    yield p
+    for k in keycheck.KEY_ENVS:
+        os.environ.pop(k, None)
+
+
+def _fake_bridge(envfile: Path, provider="deepseek", provider_name="DeepSeek"):
+    b = Bridge.__new__(Bridge)
+    coach = SimpleNamespace(api_key="", base_url="https://api.deepseek.com", model="deepseek-chat")
+
+    def reload_llm():
+        coach.api_key = os.environ.get("DEEPSEEK_API_KEY", "")
+
+    b._svc = SimpleNamespace(provider_id=provider, provider_name=provider_name, coach=coach, reload_llm=reload_llm)
+    b._env_path = envfile
+    b._env_names = set()
+    b._last_test = {}
+    return b
+
+
+def test_reload_env_returns_booleans_only_and_never_writes(envfile, caplog):
+    caplog.set_level(logging.DEBUG)
+    before = envfile.read_bytes(), envfile.stat().st_mtime_ns
+    b = _fake_bridge(envfile)
+    res = b.reload_env()
+    dumped = json.dumps(res, ensure_ascii=False)
+    assert SECRET not in dumped and SECRET not in caplog.text
+    assert res["key"]["configured"] is True and res["key"]["key_env"] == "DEEPSEEK_API_KEY"
+    assert res["keys"]["DEEPSEEK_API_KEY"] is True and res["keys"]["STEPFUN_API_KEY"] is False
+    assert all(isinstance(v, bool) for v in res["keys"].values())
+    assert (envfile.read_bytes(), envfile.stat().st_mtime_ns) == before
+
+
+def test_reload_env_picks_up_removed_key(envfile):
+    b = _fake_bridge(envfile)
+    assert b.reload_env()["key"]["configured"] is True
+    envfile.write_text("LLM_PROVIDER=deepseek\n", encoding="utf-8")  # user deletes the line
+    res = b.reload_env()
+    assert res["key"]["configured"] is False and res["keys"]["DEEPSEEK_API_KEY"] is False
+
+
+def test_key_status_stt_flags():
+    assert keycheck.key_status("deepseek", "DeepSeek", "")["has_stt"] is False
+    s = keycheck.key_status("stepfun_plan", "阶跃", SECRET)
+    assert s["has_stt"] is True and s["stepfun_key"] is True and SECRET not in json.dumps(s)
+
+
+# ── test_key (network mocked) ──────────────────────────
+class _Client:
+    def __init__(self, exc=None, calls=None):
+        self.exc, self.calls = exc, calls if calls is not None else []
+        self.chat = SimpleNamespace(completions=SimpleNamespace(create=self._create))
+
+    def _create(self, **kw):
+        self.calls.append(kw)
+        if self.exc:
+            raise self.exc
+        return SimpleNamespace(choices=[])
+
+
+def _factory(exc=None, calls=None):
+    return lambda **kw: _Client(exc, calls)
+
+
+def _resp(code):
+    return httpx.Response(code, request=httpx.Request("POST", "https://api.example.com/chat/completions"))
+
+
+def test_test_key_ok_minimal_request():
+    calls: list = []
+    r = keycheck.test_key(SECRET, "https://api.example.com", "m", client_factory=_factory(calls=calls))
+    assert r["ok"] is True and r["reason_zh"] == "连接正常"
+    assert calls[0]["max_tokens"] <= 8 and len(calls[0]["messages"]) == 1
+
+
+@pytest.mark.parametrize(
+    "exc,reason",
+    [
+        (openai.AuthenticationError(f"Incorrect API key provided: {SECRET}", response=_resp(401), body=None), "Key 无效"),
+        (openai.RateLimitError("quota", response=_resp(429), body=None), "额度"),
+        (openai.APIStatusError("pay", response=_resp(402), body=None), "额度用完"),
+        (openai.NotFoundError("no model", response=_resp(404), body=None), "模型名"),
+        (openai.APITimeoutError(request=httpx.Request("POST", "https://x")), "超时"),
+        (openai.APIConnectionError(request=httpx.Request("POST", "https://x")), "网络不通"),
+        (RuntimeError(f"boom {SECRET}"), "测试失败"),
+    ],
+)
+def test_test_key_errors_are_chinese_and_leak_nothing(exc, reason, caplog):
+    caplog.set_level(logging.DEBUG)
+    r = keycheck.test_key(SECRET, "https://api.example.com", "m", client_factory=_factory(exc))
+    assert r["ok"] is False and reason in r["reason_zh"]
+    assert SECRET not in json.dumps(r, ensure_ascii=False) and SECRET not in caplog.text
+
+
+def test_test_key_without_key_makes_no_request():
+    calls: list = []
+    r = keycheck.test_key("", "https://api.example.com", "m", client_factory=_factory(calls=calls))
+    assert r == {"ok": False, "reason_zh": "还没填 Key", "ms": None} and calls == []
+
+
+def test_bridge_test_key_uses_mocked_client(envfile, monkeypatch, caplog):
+    caplog.set_level(logging.DEBUG)
+    seen = {}
+
+    def fake_openai(**kw):
+        seen.update(kw)
+        return _Client(openai.AuthenticationError(f"bad {SECRET}", response=_resp(401), body=None))
+
+    monkeypatch.setattr(openai, "OpenAI", fake_openai)
+    before = envfile.read_bytes()
+    b = _fake_bridge(envfile)
+    b.reload_env()
+    r = b.test_key()
+    assert seen["api_key"] == SECRET and seen["max_retries"] == 0  # went to the (fake) client only
+    assert r == {"ok": False, "reason_zh": "Key 无效或没有权限", "ms": None}
+    assert SECRET not in json.dumps(b._last_test) and SECRET not in caplog.text
+    assert envfile.read_bytes() == before

@@ -1,17 +1,13 @@
 let lastS = null;
 const HERO_CN = {}; // filled lazily later from hero_aliases.json (not in prototype)
 let lastHero = '';
-function chip(el, cls, text) { el.innerHTML = `<span class="dot ${cls}"></span>${esc(text)}`; }
 function render(s) {
   applyMotion(s);
   $('#rm').classList.toggle('on', !!s.reduce_motion);
   // top chips + status cards
   const g = s.gsi;
-  chip($('#chip-gsi'), g.online ? 'ok' : 'warn', g.online ? 'Dota 已连接' : '等待 Dota');
-  chip($('#chip-coach'), s.coach.key_ok ? 'ok' : 'err', s.coach.key_ok ? `教练 · ${s.coach.provider}` : '教练未设置 Key');
-  const ttsOff = s.voice.tts === 'mock', sttOff = s.voice.stt === 'mock';
-  $('#chip-voice span').textContent = ttsOff ? '播报 · 未配置' : `播报 · ${s.voice.tts}`;
-  $('#chip-voice').classList.toggle('off', ttsOff);
+  renderTopbar(s);
+  const sttOff = s.voice.stt === 'mock';
   $('#mic').classList.toggle('off', sttOff); $('#mic').title = sttOff ? '未配置语音识别' : '按住说话';
   $('#mic-use').setAttribute('href', sttOff ? '#mic-off' : '#mic');
   $('#gsi-addr').textContent = g.addr;
@@ -21,7 +17,7 @@ function render(s) {
   $('#st-coach').classList.toggle('err', !s.coach.key_ok);
   $('#st-coach-d').textContent = s.coach.key_ok ? `${s.coach.provider} · ${s.coach.model}` : '没有 Key，提醒照常工作';
   $('#st-coach-r').textContent = s.coach.key_ok ? '就绪' : '去设置'; $('#st-coach-r').className = 'r' + (s.coach.key_ok ? '' : ' fix');
-  $('#st-voice-d').textContent = `TTS ${s.voice.tts} · STT ${s.voice.stt}`;
+  $('#st-voice-d').textContent = `播报：${s.voice.tts_zh} · 语音提问：${s.voice.stt_zh}`;
   // hero banner
   const day = $('#hero-day');
   if (s.daytime === null || s.daytime === undefined) day.hidden = true; else { day.hidden = false; day.textContent = s.daytime ? '☀ 白天' : '☾ 夜晚'; }
@@ -30,7 +26,7 @@ function render(s) {
     $('#hero-h1').innerHTML = `${esc(s.hero_zh || s.hero || '对局中')} <em>Lv${s.level}</em>`;
     $('#hero-p').textContent = s.alive ? '小窗已经在游戏上面了。问问题按 Enter，Esc 把键盘还给游戏。' : '阵亡中，趁现在问问下一步怎么打。';
   } else {
-    $('#hero-label').textContent = g.online ? `READY · ${s.game_state || '在客户端'}` : 'READY · 等待下一局';
+    $('#hero-label').textContent = g.online ? `READY · ${s.game_state_zh || '在客户端'}` : 'READY · 等待下一局';
     $('#hero-h1').innerHTML = '下一局，<em>我帮你盯着</em>';
     $('#hero-p').textContent = '进入对局后小窗会自动出现。打字或点麦克风都能提问。';
   }
@@ -71,13 +67,12 @@ onReady(() => {
   const send = () => { const v = $('#q').value.trim(); if (!v) return; api().ask(v, false); $('#q').value = ''; };
   $('#send').onclick = send;
   $('#q').addEventListener('keydown', e => { if (e.key === 'Enter') send(); });
-  $('#mic').onclick = async () => { if (!(await api().listen())) toast(lastS && lastS.voice && lastS.voice.stt === 'mock' ? '还没配语音识别，先打字提问吧' : '正在处理上一个问题，稍等'); };
-  $('#btn-min').onclick = () => api().minimize();
-  $('#btn-close').onclick = () => api().close();
-  $('#btn-ov').onclick = () => api().toggle_overlay();
+  $('#mic').onclick = async () => {
+    if (lastS && lastS.voice && lastS.voice.stt === 'mock') return toast('还没配语音识别，先打字提问吧', { icon: 'mic-off', href: SET.voice });
+    if (!(await api().listen())) toast('正在处理上一个问题，稍等');
+  };
+  wireChrome(() => lastS);
+  $('#st-coach-r').onclick = () => { if (lastS && !lastS.coach.key_ok) location.href = SET.coach; };
   $('#rm').onclick = () => api().set_reduce_motion(!$('#rm').classList.contains('on'));
-  document.querySelectorAll('.rail a.soon').forEach(a => a.onclick = () => toast('这个页面还在做，先用首页'));
   poll(s => { lastS = s; render(s); }, 1000);
 });
-let toastT = 0;
-function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('on'), 2500); }
