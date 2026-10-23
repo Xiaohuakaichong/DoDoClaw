@@ -17,7 +17,8 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 STATIC = Path(__file__).resolve().parent / "static"
-OV_W, OV_H, OV_COMPACT = 344, 324, (274, 64)  # card + 12px shadow margin each side
+OV_W, OV_H, OV_COMPACT = 320, 300, (250, 40)  # window == card (no shadow margin); JS fit() refines
+OV_BG = "#0a0c11"  # opaque card colour: no white flash, no grey corners
 URGENT_KEYS = ("roshan", "aegis", "肉山", "盾")
 OV_POS = (24, 120)
 
@@ -148,6 +149,7 @@ class Bridge:
         self._ov_win = None
         self.compact = False
         self.overlay_forced: bool | None = None
+        self._ov_shape = ""
         self.reduce_motion = False
         self._busy = False
         self._answer: dict[str, Any] = {}
@@ -560,12 +562,27 @@ class Bridge:
     def fit_overlay(self, w: int, h: int) -> None:
         if self._ov_win is not None and 100 <= int(w) <= 800 and 40 <= int(h) <= 900:
             self._ov_win.resize(int(w), int(h))
+            self._shape_overlay()
+
+    def _shape_overlay(self) -> None:
+        """Round the overlay's corners (Win11 DWM / Win10 window region). One-shot, not per frame."""
+        if self._ov_win is None:
+            return
+        from dodoclaw.webui import winshape
+
+        if self._ov_shape == "dwm":  # DWM keeps the corners through resizes
+            return
+        try:
+            self._ov_shape = winshape.round_corners(winshape.hwnd_of(self._ov_win))
+        except Exception:
+            logger.debug("overlay corner shaping failed", exc_info=True)
 
     def toggle_compact(self) -> bool:
         self.compact = not self.compact
         if self._ov_win:
             w, h = OV_COMPACT if self.compact else (OV_W, OV_H)
             self._ov_win.resize(w, h)
+            self._shape_overlay()
         return self.compact
 
     def minimize(self) -> None:
@@ -634,13 +651,16 @@ def run_webui(debug: bool = False) -> int:
         frameless=True,
         easy_drag=False,
         on_top=True,
-        transparent=True,
+        # Not transparent=True: on WinForms that leaves the Form's grey BackColor
+        # around the card and EdgeChromium transparent windows get no input.
         resizable=False,
         hidden=True,
         focus=True,
-        background_color="#000000",
+        background_color=OV_BG,
     )
     bridge._main_win.events.closed += bridge.close
+    bridge._ov_win.events.shown += bridge._shape_overlay
+    bridge._ov_win.events.loaded += bridge._shape_overlay
 
     def _started() -> None:
         threading.Thread(target=bridge._watch, name="overlay-watch", daemon=True).start()

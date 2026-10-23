@@ -66,11 +66,11 @@ onReady(() => {
   poll(s => { render(s); fit(); }, 500);
 });
 
-// Window follows content: 12px transparent margin on every side for the shadow
+// Window follows content exactly (no margin): the OS rounds the window's corners
 let lastSize = '';
 function fit() {
   const el = $('#ov').hidden ? $('#pill') : $('#ov');
   const r = el.getBoundingClientRect();
-  const w = Math.ceil(r.width) + 24, h = Math.ceil(r.height) + 24, k = `${w}x${h}`;
+  const w = Math.ceil(r.width), h = Math.ceil(r.height), k = `${w}x${h}`;
   if (k !== lastSize && r.height > 0) { lastSize = k; api().fit_overlay(w, h); }
 }
