@@ -90,8 +90,8 @@ _GUIDE: dict[str, tuple[str, str, str]] = {
     "balance": ("去平台充值后点“重新测试”，不用重填。", "去充值", "topup"),
     "rate_limit": ("过一分钟再点“重新测试”。", "", ""),
     "network": ("xAI / OpenAI 在国内要开代理；开好后点“重新测试”。", "", ""),
-    # 高级 → 接口与模型 is not built yet: point at settings.yaml instead of a dead link
-    "not_found": ("检查 config\\settings.yaml 里 coach 的 model / base_url，删掉这两行就恢复默认，再点“重新测试”。", "", ""),
+    # 高级 → 接口与模型 is not built yet: point at the settings file (in words, no internal names)
+    "not_found": ("模型名或接口地址不对。把服务商重新选一次就恢复默认；要用自定义模型，请在程序目录 config 文件夹里的设置文件中修改，改完点“重新测试”。", "", ""),
     "unknown": ("点“重新测试”；还不行就把日志发给开发者。", "打开日志", "log"),
     "http": ("点“重新测试”；还不行就把日志发给开发者。", "打开日志", "log"),
 }

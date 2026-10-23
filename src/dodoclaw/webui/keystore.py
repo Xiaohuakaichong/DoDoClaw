@@ -87,8 +87,8 @@ def upsert_env_line(path: Path, var: str, value: str | None) -> None:
     - every other line, comment, blank line and the order are kept byte-for-byte,
       including CRLF line endings;
     - ``value=None`` removes the active ``var=`` lines instead;
-    - copies the old file to ``.env.bak`` first, then writes UTF-8 without BOM,
-      atomically (temp file + rename).
+    - writes UTF-8 without BOM, atomically (temp file + rename); no backup copy
+      is kept, so old keys never linger in a second plaintext file.
     """
     raw = path.read_bytes() if path.exists() else b""
     text = raw.decode("utf-8-sig")  # drops a BOM if a text editor added one
@@ -113,8 +113,6 @@ def upsert_env_line(path: Path, var: str, value: str | None) -> None:
     data = "".join(lines).encode("utf-8")
 
     path.parent.mkdir(parents=True, exist_ok=True)
-    if raw:
-        path.with_name(path.name + ".bak").write_bytes(raw)
     tmp = path.with_name(path.name + ".tmp")
     tmp.write_bytes(data)
     os.replace(tmp, path)

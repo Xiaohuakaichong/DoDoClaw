@@ -99,8 +99,8 @@ function renderProvMenu(s) {
   $('#prov-menu').innerHTML = rows.map(p => {
     const st = p.configured ? '<span class="dot ok"></span>已配置' : '未配置';
     return `<div class="mi${p.current ? ' cur' : ''}" role="option" aria-selected="${p.current}" data-v="${esc(p.id)}">${CK}<div><div class="nm">${esc(p.name)}${tagPill(p.tag, p.id === 'deepseek')}</div><div class="ds">${esc(p.model)} · ${st}${p.hint ? ' · ' + esc(p.hint) : ''}</div></div>${p.apply_url ? `<span class="link ap" data-apply="${esc(p.id)}">去申请 ${EXT}</span>` : ''}</div>`;
-  }).join('') + '<div class="ft">每家的 Key 分开保存，切换不会清掉别家的。<br>通义、Kimi、自定义接口暂时只能在 config 文件夹的 settings.yaml 里设置。</div>';
-  if (!k.in_picker) $('#prov-menu .ft').insertAdjacentHTML('afterbegin', `现在用的是 ${esc(k.provider_name)}（在 settings.yaml 里设的）。<br>`);
+  }).join('') + '<div class="ft" title="config\\settings.yaml">每家的 Key 分开保存，切换不会清掉别家的。<br>通义、Kimi、自定义接口暂时只能在程序目录 config 文件夹里的设置文件中修改。</div>';
+  if (!k.in_picker) $('#prov-menu .ft').insertAdjacentHTML('afterbegin', `现在用的是 ${esc(k.provider_name)}（在设置文件里改的）。<br>`);
 }
 
 function renderCoachKs() {

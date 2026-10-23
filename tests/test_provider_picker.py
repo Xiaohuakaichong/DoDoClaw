@@ -86,17 +86,17 @@ def test_env_writer_appends_when_missing_and_keeps_crlf(tmp_path):
     assert raw == b"# win\r\nSTEPFUN_API_KEY=" + OLD.encode() + b"\r\nGSI_PORT=3000\r\nXAI_API_KEY=" + SECRET.encode() + b"\r\n"
 
 
-def test_env_writer_backs_up_old_file_first(tmp_path):
+def test_env_writer_keeps_no_plaintext_backup(tmp_path):
     p = tmp_path / ".env"
     p.write_bytes(b"# mine\nDEEPSEEK_API_KEY=old\n")
     keystore.upsert_env_line(p, "DEEPSEEK_API_KEY", SECRET)
-    assert (tmp_path / ".env.bak").read_bytes() == b"# mine\nDEEPSEEK_API_KEY=old\n"
-    assert not (tmp_path / ".env.tmp").exists()
+    assert p.read_bytes() == b"# mine\nDEEPSEEK_API_KEY=" + SECRET.encode() + b"\n"
+    assert sorted(x.name for x in tmp_path.iterdir()) == [".env"]  # no .env.bak, no leftover .env.tmp
 
 
 def test_env_writer_new_file_has_no_backup(tmp_path):
     keystore.upsert_env_line(tmp_path / ".env", "DEEPSEEK_API_KEY", SECRET)
-    assert not (tmp_path / ".env.bak").exists()
+    assert sorted(x.name for x in tmp_path.iterdir()) == [".env"]
 
 
 @pytest.mark.parametrize("val", ["abc#def", "a$b{c}"])
@@ -255,6 +255,15 @@ def test_failure_guides_are_fixed_chinese():
     assert keycheck.test_guide("network")["link"] == "" and keycheck.test_guide("weird")["link"] == "log"
 
 
+def test_failure_guides_have_no_internal_names():
+    g = keycheck.test_guide("not_found")
+    assert "模型名或接口地址不对" in g["detail_zh"] and "config 文件夹" in g["detail_zh"]
+    for kind in ("ok", "plan_expired", "auth", "balance", "rate_limit", "network", "not_found", "unknown", "http"):
+        text = keycheck.test_guide(kind)["detail_zh"]
+        for word in ("settings.yaml", "coach", "model", "base_url", "yaml"):
+            assert word not in text, (kind, word)
+
+
 # ── bridge with a real settings.yaml in tmp ──────────────
 @pytest.fixture
 def world(tmp_path, monkeypatch):
@@ -369,11 +378,11 @@ def test_bridge_save_key_stores_reloads_and_auto_tests(world, monkeypatch, caplo
     r = b.save_key("deepseek", f"  {SECRET}  ")
     assert r["ok"] is True and r["kind"] == "ok" and r["configured"] is True and r["model"] == "deepseek-flash"
     assert set(r) == {"ok", "kind", "reason_zh", "ms", "model", "configured", "saved", "msg"}
-    # written next to the exe, other lines untouched, old file backed up
+    # written next to the exe, other lines untouched, no plaintext backup of old keys
     assert world.env.read_text(encoding="utf-8") == (
         f"# 我的 Key\nSTEPFUN_API_KEY={OLD}\nGSI_PORT=3000\nDEEPSEEK_API_KEY={SECRET}\n"
     )
-    assert (world.env.parent / ".env.bak").read_text(encoding="utf-8") == f"# 我的 Key\nSTEPFUN_API_KEY={OLD}\nGSI_PORT=3000\n"
+    assert not (world.env.parent / ".env.bak").exists()
     # reloaded into the live coach and tested once with the new key
     assert svc.coach.api_key == SECRET
     assert len(made) == 1 and made[0]["api_key"] == SECRET and made[0]["base_url"] == "https://api.deepseek.com"
