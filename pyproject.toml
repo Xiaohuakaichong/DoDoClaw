@@ -36,6 +36,8 @@ speech = [
 # New web UI layer (prototype): WebView2 via pywebview
 webui = [
     "pywebview>=5.0",
+    # 试听 / default free voice: must be in the build venv or the exe ships without it
+    "edge-tts>=6.1.12",
 ]
 # Desktop packaging extras
 app = [

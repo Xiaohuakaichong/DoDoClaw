@@ -6,6 +6,12 @@ Set-Location $Root
 $Py = Join-Path $Root ".venv\Scripts\python.exe"
 
 & $Py -m pip install -q -e ".[webui]" "pyinstaller>=6.0"
+if ($LASTEXITCODE -ne 0) { throw "pip install failed" }
+# Fail fast: without edge_tts the exe has no free Edge voice and the voice preview only shows a toast
+& $Py -c "import edge_tts, aiohttp, certifi"
+if ($LASTEXITCODE -ne 0) {
+    throw "edge_tts / aiohttp / certifi cannot be imported in .venv. Run: .venv\Scripts\python.exe -m pip install `"edge-tts>=6.1.12`""
+}
 $Dist = Join-Path $Root "dist\DoDoClaw-preview"
 # Clear contents only (folder itself may be open in Explorer)
 if (Test-Path $Dist) { Get-ChildItem $Dist -Force | Remove-Item -Recurse -Force }

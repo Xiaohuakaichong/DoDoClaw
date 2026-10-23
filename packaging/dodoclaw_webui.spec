@@ -5,7 +5,7 @@
 
 from pathlib import Path
 
-from PyInstaller.utils.hooks import collect_all, collect_submodules
+from PyInstaller.utils.hooks import collect_all, collect_data_files, collect_submodules
 
 ROOT = Path(SPECPATH).resolve().parent
 SRC = ROOT / "src" / "dodoclaw"
@@ -33,6 +33,12 @@ for pkg in ("webview", "pythonnet", "clr_loader"):
     binaries += b
     hiddenimports += h
 hiddenimports += collect_submodules("uvicorn")
+# Edge 免费声音 (试听 + default TTS): edge_tts is imported lazily via importlib,
+# so PyInstaller can't see it. Pull it in with its aiohttp stack and CA bundle.
+for pkg in ("edge_tts", "aiohttp"):
+    hiddenimports += collect_submodules(pkg)
+hiddenimports += ["certifi"]
+datas += collect_data_files("certifi")
 
 a = Analysis(
     [str(ROOT / "packaging" / "entry_webui.py")],
