@@ -241,7 +241,6 @@ class Bridge:
             "error": self._error,
             "compact": self.compact,
             "reduce_motion": self.reduce_motion,
-            "ov_opacity": self.ui["overlay_opacity"],
         }
 
     def icon(self, kind: str, key: str) -> str:
@@ -426,8 +425,7 @@ class Bridge:
             if "on" in patch:
                 self.ui, msg = settings_store.toggle_reminder(self.ui, row, bool(patch["on"]))
             # "lead" is ignored: lead times are not editable until the engine supports them
-        if "overlay_opacity" in patch:
-            self.ui["overlay_opacity"] = max(40, min(100, int(patch["overlay_opacity"])))
+        # 小窗透明度 is gone (D11): the overlay window is opaque, a slider would do nothing.
         if "auto_overlay" in patch:
             self.ui["auto_overlay"] = bool(patch["auto_overlay"])
         if "stt_mode" in patch and patch["stt_mode"] in ("local", "cloud"):

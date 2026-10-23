@@ -104,10 +104,6 @@ function renderCoach(s) {
 }
 
 function renderOverlay(s) {
-  const op = s.ui.overlay_opacity, sl = $('#sl-op'), inp = sl.querySelector('input');
-  if (document.activeElement !== inp) inp.value = op;
-  setSlider(sl, (op - 40) / 60 * 100); $('#op-v').textContent = op + '%';
-  $('#ovmini').style.background = `rgba(14,17,25,${op / 100})`;
   $('#sw-auto').classList.toggle('on', !!s.ui.auto_overlay);
   $('#sw-rm').classList.toggle('on', !!s.ui.reduce_motion);
   document.documentElement.classList.toggle('reduce-motion', !!s.ui.reduce_motion);
@@ -184,9 +180,6 @@ onReady(async () => {
   document.querySelectorAll('.opt').forEach(o => o.onclick = () => { if (S.voice.ask_on) save({ stt_mode: o.dataset.m }); });
   $('#btn-hotkey').onclick = () => { if (S.voice.ask_on) toast('全局快捷键还在做，先点麦克风提问'); };
   // overlay & motion
-  const op = $('#sl-op input');
-  op.oninput = () => { setSlider($('#sl-op'), (op.value - 40) / 60 * 100); $('#op-v').textContent = op.value + '%'; $('#ovmini').style.background = `rgba(14,17,25,${op.value / 100})`; };
-  op.onchange = () => save({ overlay_opacity: +op.value });
   $('#btn-ovpos').onclick = async () => toast((await api().reset_overlay_pos()) ? '小窗已回到默认位置' : '小窗还没打开，进对局后再试');
   $('#sw-auto').onclick = () => save({ auto_overlay: !S.ui.auto_overlay });
   $('#sw-rm').onclick = async () => { await api().set_reduce_motion(!S.ui.reduce_motion); flashSaved(); refresh(); };

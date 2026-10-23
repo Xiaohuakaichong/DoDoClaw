@@ -10,7 +10,6 @@ function timerRow(x) {
 }
 function render(s) {
   applyMotion(s);
-  if (s.ov_opacity) $('.ov').style.background = `rgba(9,11,16,${(s.ov_opacity / 100).toFixed(2)})`;
   const ov = $('#ov'), pill = $('#pill');
   ov.hidden = s.compact; pill.hidden = !s.compact;
   const dotCls = s.gsi.online ? (s.paused ? 'warn' : 'ok') : 'err';

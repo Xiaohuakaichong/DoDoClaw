@@ -208,3 +208,12 @@ def test_overlay_calls_are_serialized(monkeypatch):
     for t in ts:
         t.join()
     assert overlap == []
+
+
+def test_no_overlay_opacity_control_d11():
+    # The overlay window is opaque: a 透明度 slider would do nothing (PRD 6.6).
+    html = (webapp.STATIC / "settings.html").read_text(encoding="utf-8")
+    js = (webapp.STATIC / "settings.js").read_text(encoding="utf-8")
+    ov = (webapp.STATIC / "overlay.js").read_text(encoding="utf-8")
+    assert "不透明度" not in html and "透明度" not in html and 'id="sl-op"' not in html
+    assert "overlay_opacity" not in js and "ov_opacity" not in ov
