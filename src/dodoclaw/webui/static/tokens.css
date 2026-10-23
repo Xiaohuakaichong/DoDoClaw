@@ -29,7 +29,7 @@ body{font-family:var(--font);color:var(--text);font-size:14px;line-height:1.5;-w
 .glass{background:var(--glass);border:1px solid var(--line);border-radius:var(--r-m);box-shadow:var(--shadow-1);backdrop-filter:blur(18px) saturate(140%)}
 .chip{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 12px;border-radius:var(--r-pill);background:rgba(255,255,255,.05);border:1px solid var(--line);font-size:12px;color:var(--text-2)}
 .dot{width:7px;height:7px;border-radius:50%;flex:none}
-.dot.ok{background:var(--ok);box-shadow:0 0 8px var(--ok)}.dot.warn{background:var(--warn);box-shadow:0 0 8px var(--warn)}.dot.err{background:var(--danger);box-shadow:0 0 8px var(--danger)}
+.dot.mute{background:var(--text-3);box-shadow:none}.dot.ok{background:var(--ok);box-shadow:0 0 8px var(--ok)}.dot.warn{background:var(--warn);box-shadow:0 0 8px var(--warn)}.dot.err{background:var(--danger);box-shadow:0 0 8px var(--danger)}
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:40px;padding:0 18px;border-radius:var(--r-s);font:600 14px var(--font);border:1px solid transparent;color:var(--text);cursor:pointer;transition:transform var(--dur-1) var(--ease),filter var(--dur-1)}
 .btn:hover{filter:brightness(1.08)}.btn:active{transform:translateY(1px)}
 .btn.primary{background:var(--brand-grad);box-shadow:var(--brand-glow);color:#fff}

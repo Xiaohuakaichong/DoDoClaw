@@ -84,6 +84,10 @@ function renderCoach(s) {
   $('#tts-name').textContent = v.tts_on ? v.tts_zh : '没开播报，提醒只在小窗显示';
   // 语音提问
   $('#sw-ask').classList.toggle('on', v.ask_on);
+  // 语音提问关着时，识别方式和快捷键都不能点
+  $('#c-voice').classList.toggle('ask-off', !v.ask_on);
+  document.querySelectorAll('#c-voice .opt').forEach(o => { o.classList.toggle('dis', !v.ask_on); o.setAttribute('aria-disabled', String(!v.ask_on)); });
+  $('#btn-hotkey').setAttribute('aria-disabled', String(!v.ask_on));
   $('#ask-pill').className = 'pill ' + (v.ask_on ? 'ok' : 'mute');
   $('#ask-pill').textContent = v.ask_on ? `已开启 · ${v.stt_zh}` : '未配置语音识别';
   $('#ask-ico').style.color = v.ask_on ? 'var(--info)' : 'var(--text-3)';
@@ -117,9 +121,11 @@ function renderAdv(s) {
   $('#adv-port').textContent = a.port; $('#adv-host').textContent = `端口 · ${a.host}`;
   $('#adv-token').textContent = a.token_set ? '已设置' : '未设置';
   $('#adv-cfg').textContent = a.cfg_path ? (a.cfg_ok ? a.cfg_path : '还没写入：' + a.cfg_path) : '没找到 Dota 目录';
+  $('#adv-cfg').dataset.path = a.cfg_path || ''; $('#adv-cfg').title = a.cfg_path ? a.cfg_path + '\n点击复制' : '';
+  $('#adv-cfg').classList.toggle('copyable', !!a.cfg_path);
   $('#sw-rec').classList.toggle('on', a.recording);
   $('#adv-icondir').textContent = a.icon_dir || '';
-  $('#adv-icondir').title = a.icon_dir || '';
+  $('#adv-icondir').dataset.path = a.icon_dir || ''; $('#adv-icondir').title = a.icon_dir ? a.icon_dir + '\n点击复制' : '';
   $('#adv-icons').textContent = `${a.icon_count} 个 · ${a.icon_mb} MB`;
   $('#ver-side').textContent = `v${s.version} 预览版`; $('#ver-about').textContent = `v${s.version} 预览版`;
 }
@@ -164,13 +170,12 @@ onReady(async () => {
   });
   $('#btn-test').onclick = runTest;
   $('#btn-apply').onclick = () => api().open_key_page();
-  $('#prov').onclick = () => toast('换服务商的下拉还在做，现在先在 .env 里改');
   // voice
   $('#sw-tts').onclick = async () => { const r = await api().set_tts(!S.voice.tts_on); if (r.msg) toast(r.msg, { icon: 'alert' }); else flashSaved(); refresh(); };
   $('#btn-preview').onclick = async () => { if (!(await api().preview_tts())) toast('先打开语音播报再试听', { icon: 'alert' }); };
   $('#sw-ask').onclick = () => save({ voice_ask: !S.voice.ask_on });
-  document.querySelectorAll('.opt').forEach(o => o.onclick = () => save({ stt_mode: o.dataset.m }));
-  $('#btn-hotkey').onclick = () => toast('全局快捷键还在做，先点麦克风提问');
+  document.querySelectorAll('.opt').forEach(o => o.onclick = () => { if (S.voice.ask_on) save({ stt_mode: o.dataset.m }); });
+  $('#btn-hotkey').onclick = () => { if (S.voice.ask_on) toast('全局快捷键还在做，先点麦克风提问'); };
   // overlay & motion
   const op = $('#sl-op input');
   op.oninput = () => { setSlider($('#sl-op'), (op.value - 40) / 60 * 100); $('#op-v').textContent = op.value + '%'; $('#ovmini').style.background = `rgba(14,17,25,${op.value / 100})`; };
@@ -180,6 +185,11 @@ onReady(async () => {
   $('#sw-rm').onclick = async () => { await api().set_reduce_motion(!S.ui.reduce_motion); flashSaved(); refresh(); };
   // advanced
   $('#btn-cfg').onclick = async () => { const r = await api().rewrite_cfg(); toast(r.msg, { icon: r.ok ? 'check' : 'alert' }); refresh(); };
+  document.querySelectorAll('#adv-cfg, #adv-icondir').forEach(el => el.onclick = async () => {
+    const p = el.dataset.path; if (!p) return;
+    const ok = await copyText(p);
+    toast(ok ? '已复制路径' : '没能复制，请手动选中路径', { icon: ok ? 'check' : 'alert' });
+  });
   $('#btn-port').onclick = () => toast('换端口还在做，这一版先用 3000');
   $('#sw-rec').onclick = async () => { const on = await api().set_gsi_record(!S.adv.recording); toast(on ? '开始录制，样本存在 logs\\gsi 里' : '已停止录制'); refresh(); };
   $('#btn-icons').onclick = async () => { const n = await api().clear_icon_cache(); toast(`已清空 ${n} 个图标，用到时会重新下载`); refresh(); };

@@ -81,6 +81,13 @@ html:not(.key-none) .k-none,html.key-none .k-env{display:none!important}
 .keybox.warnk{border-color:rgba(255,190,85,.35);background:rgba(255,190,85,.06)}.keybox.warnk .ico{color:var(--warn)}
 .opt.sel{border-color:rgba(255,138,61,.55);background:linear-gradient(135deg,rgba(229,72,47,.12),rgba(0,0,0,.2) 70%);box-shadow:inset 0 0 0 1px rgba(255,138,61,.25)}
 .opt .tag{margin-left:auto}.opt.dis{opacity:.5;pointer-events:none}
+/* 服务商: read-only text, no dropdown affordance */
+.field.ro{cursor:default;user-select:text}.field.ro:hover,.field.ro:focus{border-color:var(--line-2);box-shadow:none;outline:none}
+/* 语音提问关闭时：识别方式与快捷键不可用 */
+#c-voice.ask-off .opt{opacity:.5;pointer-events:none}
+#c-voice.ask-off .hk{opacity:.5;pointer-events:none;filter:grayscale(1)}
+/* 可复制路径 */
+.mono.copyable{cursor:copy}.mono.copyable:hover{border-color:var(--line-2);color:var(--text)}
 .saved{opacity:0;transition:opacity var(--dur-2)}.saved.on{opacity:1}
 .pane{overflow:auto}.pane::-webkit-scrollbar{width:6px}.pane::-webkit-scrollbar-thumb{background:rgba(255,255,255,.1);border-radius:3px}
 .slider input{position:absolute;inset:-6px 0;width:100%;opacity:0;cursor:pointer;margin:0}
@@ -146,7 +153,7 @@ a.link{text-decoration:none}
   <div class="stat">
    <span class="chip btnlike" id="chip-gsi"><span class="dot warn"></span>等待 Dota</span>
    <span class="chip btnlike" id="chip-coach"><span class="dot warn"></span>教练</span>
-   <span class="chip btnlike" id="chip-voice"><svg class="ico" style="width:14px;height:14px"><use href="#vol"/></svg><span>播报</span></span>
+   <span class="chip btnlike" id="chip-voice"><span class="dot mute"></span><svg class="ico" style="width:14px;height:14px"><use href="#vol"/></svg><span>播报</span></span>
    <span class="chip btnlike" id="btn-ov" title="显示/隐藏对局小窗"><svg class="ico" style="width:14px;height:14px"><use href="#expand"/></svg>小窗</span>
   </div>
   <div class="wc"><span id="btn-min"><svg class="ico"><use href="#min"/></svg></span><span class="x" id="btn-close"><svg class="ico"><use href="#x"/></svg></span></div></div>
@@ -191,7 +198,7 @@ a.link{text-decoration:none}
   <div class="card" id="c-coach">
    <div class="ch"><span class="gl gi" style="background:rgba(229,72,47,.12);color:var(--brand-2)"><svg class="ico"><use href="#chat"/></svg></span><div><div class="t">AI 教练</div><div class="d">提问和赛后建议要用；不配也能用全部提醒</div></div><div class="r"><span class="pill ok k-env"><span class="dot ok"></span>已配置</span><span class="pill warn k-none"><span class="dot warn"></span>未配置</span></div></div>
    <div style="margin-top:12px">
-    <div class="row"><span class="k">服务商</span><div class="v"><div class="field btnlike" id="prov" style="width:280px;cursor:pointer"><span id="prov-name">—</span><svg class="ico caret" style="width:14px;height:14px"><use href="#down"/></svg></div><span class="hint">在 .env 里切换服务商</span></div></div>
+    <div class="row"><span class="k">服务商</span><div class="v"><div class="field ro" id="prov" style="width:280px" aria-readonly="true"><span id="prov-name">—</span></div><span class="hint">在 .env 里切换服务商</span></div></div>
     <div class="row k-env"><span class="k">API Key</span><div class="v"><div class="keybox"><svg class="ico"><use href="#key"/></svg><span>已配置</span><span class="muted" style="font-size:12px">· 读取自 .env</span></div><span class="btn ghost sm" id="btn-test">测试</span><span class="btn ghost sm" data-act="open_app_dir"><svg class="ico" style="width:14px;height:14px"><use href="#folder"/></svg>打开文件夹</span><span class="btn ghost sm" data-act="reload_env" title="改完 .env 后点这里"><svg class="ico" style="width:14px;height:14px"><use href="#refresh"/></svg>重新读取</span></div></div>
     <div class="row k-env"><span class="k">上次测试</span><div class="v" id="test-res"><span class="pill mute">还没测试</span><span class="hint">点“测试”发一条很短的请求试试</span></div></div>
     <div class="row k-none"><span class="k">API Key</span><div class="v"><div class="keybox warnk"><svg class="ico"><use href="#key"/></svg><span>未配置</span><span class="muted" style="font-size:12px">· 在 exe 同目录的 .env 里填写</span></div><span class="btn primary sm" data-act="open_app_dir"><svg class="ico" style="width:14px;height:14px"><use href="#folder"/></svg>打开文件夹</span><span class="btn ghost sm" data-act="reload_env"><svg class="ico" style="width:14px;height:14px"><use href="#refresh"/></svg>重新读取</span></div></div>
@@ -209,7 +216,7 @@ a.link{text-decoration:none}
    <div style="display:flex;gap:10px;margin-top:12px">
     <div class="opt" id="opt-local" data-m="local"><div class="t"><svg class="ico" style="width:15px;height:15px;color:var(--ok)"><use href="#folder"/></svg>本地 Whisper<span class="tag" id="tag-local"></span></div><div class="d" id="d-local">离线可用，首次下载约 150 MB</div></div>
     <div class="opt" id="opt-cloud" data-m="cloud"><div class="t"><svg class="ico" style="width:15px;height:15px;color:var(--info)"><use href="#spark"/></svg>云端识别<span class="tag" id="tag-cloud"></span></div><div class="d" id="d-cloud">—</div></div>
-    <div style="display:flex;flex-direction:column;justify-content:center;gap:6px;width:170px"><span class="hint">全局按住说话快捷键</span><div class="field" style="height:32px"><span class="ph">未设置</span><span class="link" id="btn-hotkey" style="margin-left:auto;font-size:12px">设置</span></div></div>
+    <div class="hk" style="display:flex;flex-direction:column;justify-content:center;gap:6px;width:170px"><span class="hint">全局按住说话快捷键</span><div class="field" style="height:32px"><span class="ph">未设置</span><span class="link" id="btn-hotkey" style="margin-left:auto;font-size:12px">设置</span></div></div>
    </div>
   </div>
  </section>
@@ -244,12 +251,12 @@ a.link{text-decoration:none}
     <div><div class="bignum num" id="adv-port">3000</div><div class="l" id="adv-host">端口 · 127.0.0.1</div></div>
     <div><div class="bignum num" id="adv-token">已设置</div><div class="l">校验 token（不显示）</div></div>
    </div>
-   <div class="row" style="margin-top:8px"><span class="k">配置文件</span><div class="v"><span class="mono" id="adv-cfg">没找到 Dota 目录</span><span class="btn ghost sm" style="flex:none;margin-left:auto" id="btn-cfg">重新写入</span></div></div>
+   <div class="row" style="margin-top:8px"><span class="k">配置文件</span><div class="v"><span class="mono copyable" id="adv-cfg">没找到 Dota 目录</span><span class="btn ghost sm" style="flex:none;margin-left:auto" id="btn-cfg">重新写入</span></div></div>
    <div class="row"><span class="k">端口</span><div class="v"><span class="t2">被别的程序占用时换一个，会同时改写配置文件，需要重启 Dota</span><span class="btn ghost sm" style="margin-left:auto" id="btn-port">换端口</span></div></div>
    <div class="row"><span class="k">录制 GSI 样本</span><div class="v"><span class="t2">把本局推送存到本机，给开发调提醒用；只对本次运行生效</span><i class="sw" id="sw-rec" style="margin-left:auto"></i></div></div>
   </div>
   <div class="card">
-   <div class="row"><span class="k">图标缓存</span><div class="v"><span class="mono" id="adv-icondir" style="max-width:320px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span><span class="t2 num" id="adv-icons" style="font-size:14px">0 个</span><span class="btn ghost sm" style="margin-left:auto" id="btn-icons">清空并重新下载</span></div></div>
+   <div class="row"><span class="k">图标缓存</span><div class="v"><span class="mono copyable" id="adv-icondir" style="max-width:320px"></span><span class="t2 num" id="adv-icons" style="font-size:14px">0 个</span><span class="btn ghost sm" style="margin-left:auto" id="btn-icons">清空并重新下载</span></div></div>
    <div class="row"><span class="k">日志</span><div class="v"><span class="t2">出问题时把日志发给开发者</span><span class="btn ghost sm" style="margin-left:auto" data-act="open_log_dir"><svg class="ico" style="width:14px;height:14px"><use href="#folder"/></svg>打开日志文件夹</span></div></div>
   </div>
  </section>

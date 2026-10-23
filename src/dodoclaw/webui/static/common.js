@@ -39,6 +39,15 @@ function toast(msg, o) {
   t.onmouseenter = () => clearTimeout(t._t); t.onmouseleave = hide;
   t.classList.add('on'); clearTimeout(t._t); if (!o.sticky) hide();
 }
+// Clipboard with a fallback for contexts where navigator.clipboard is unavailable.
+async function copyText(text) {
+  try { if (navigator.clipboard && window.isSecureContext) { await navigator.clipboard.writeText(text); return true; } } catch (e) { /* fall through */ }
+  const ta = document.createElement('textarea');
+  ta.value = text; ta.setAttribute('readonly', ''); ta.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0';
+  document.body.appendChild(ta); ta.select();
+  let ok = false; try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+  ta.remove(); return ok;
+}
 function chip(el, cls, text) { if (el) el.innerHTML = `<span class="dot ${cls}"></span>${esc(text)}`; }
 // Title-bar status chips shared by every main-window page.
 function renderTopbar(s) {
@@ -47,8 +56,11 @@ function renderTopbar(s) {
   chip($('#chip-coach'), s.coach.key_ok ? 'ok' : 'warn', s.coach.key_ok ? `教练 · ${s.coach.provider}` : '教练 · 未配置');
   const ttsOff = s.voice.tts === 'mock';
   const v = $('#chip-voice');
-  if (v) { v.querySelector('span').textContent = ttsOff ? '播报 · 未配置' : '播报'; v.classList.toggle('off', ttsOff);
-    v.querySelector('use').setAttribute('href', ttsOff ? '#vol-off' : '#vol'); v.title = ttsOff ? '去设置配置播报' : `播报 · ${s.voice.tts_zh}`; }
+  if (v) {
+    // status dot like the other chips: green = configured, grey = 未配置
+    v.innerHTML = `<span class="dot ${ttsOff ? 'mute' : 'ok'}"></span><svg class="ico" style="width:14px;height:14px"><use href="#${ttsOff ? 'vol-off' : 'vol'}"/></svg><span>${ttsOff ? '播报 · 未配置' : '播报'}</span>`;
+    v.classList.toggle('off', ttsOff); v.title = ttsOff ? '去设置配置播报' : `播报 · ${s.voice.tts_zh}`;
+  }
 }
 // Window buttons, chips and rail entries. Nothing here is a dead click.
 function wireChrome(getState) {
