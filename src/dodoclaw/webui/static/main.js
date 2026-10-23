@@ -1,4 +1,5 @@
 let lastS = null;
+let wasBusy = false;
 const HERO_CN = {}; // filled lazily later from hero_aliases.json (not in prototype)
 let lastHero = '';
 function render(s) {
@@ -14,9 +15,12 @@ function render(s) {
   $('#st-gsi-d').textContent = g.age == null ? `还没收到数据 · 监听 ${g.addr}` : `上次推送 ${g.age} 秒前`;
   $('#st-gsi-r').textContent = g.online ? '正常' : '等待'; $('#st-gsi-r').style.color = g.online ? 'var(--ok)' : 'var(--warn)';
   $('#st-gsi .ic').style.color = g.online ? 'var(--ok)' : 'var(--warn)';
-  $('#st-coach').classList.toggle('err', !s.coach.key_ok);
-  $('#st-coach-d').textContent = s.coach.key_ok ? `${s.coach.provider} · ${s.coach.model}` : '没有 Key，提醒照常工作';
-  $('#st-coach-r').textContent = s.coach.key_ok ? '就绪' : '去设置'; $('#st-coach-r').className = 'r' + (s.coach.key_ok ? '' : ' fix');
+  // D9: a failed test / answer shows its Chinese reason until a later call succeeds
+  const cErr = s.coach.key_ok ? s.coach.error : null;
+  const cFix = !s.coach.key_ok || !!cErr;
+  $('#st-coach').classList.toggle('err', cFix);
+  $('#st-coach-d').textContent = !s.coach.key_ok ? '没有 Key，提醒照常工作' : cErr ? `${cErr.reason_zh}，提醒照常工作` : `${s.coach.provider} · ${s.coach.model}`;
+  $('#st-coach-r').textContent = cFix ? '去设置' : '就绪'; $('#st-coach-r').className = 'r' + (cFix ? ' fix' : '');
   $('#st-voice-d').textContent = `播报：${s.voice.tts_zh} · 语音提问：${s.voice.stt_zh}`;
   // hero banner
   const day = $('#hero-day');
@@ -57,6 +61,10 @@ function render(s) {
     $('#ans-meta').textContent = `${s.answer.clock} · 用时 ${(s.answer.ms / 1000).toFixed(1)}s` + (s.speaking ? ' · 播报中' : '');
   }
   $('#send').toggleAttribute('disabled', s.busy);
+  // a question just failed because of the coach service: say why and link to settings
+  if (wasBusy && !s.busy && s.error && s.coach.error && s.error === s.coach.error.reason_zh)
+    toast(s.coach.error.reason_zh, { icon: 'alert', href: SET.coach, ms: 5000 });
+  wasBusy = !!s.busy;
   // timers
   const t = $('#timers');
   if (s.timers.length) {
@@ -72,7 +80,7 @@ onReady(() => {
     if (!(await api().listen())) toast('正在处理上一个问题，稍等');
   };
   wireChrome(() => lastS);
-  $('#st-coach-r').onclick = () => { if (lastS && !lastS.coach.key_ok) location.href = SET.coach; };
+  $('#st-coach-r').onclick = () => { if (lastS && (!lastS.coach.key_ok || lastS.coach.error)) location.href = SET.coach; };
   $('#rm').onclick = () => api().set_reduce_motion(!$('#rm').classList.contains('on'));
   poll(s => { lastS = s; render(s); }, 1000);
 });

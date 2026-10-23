@@ -194,12 +194,12 @@ def test_test_key_ok_minimal_request():
     "exc,reason",
     [
         (openai.AuthenticationError(f"Incorrect API key provided: {SECRET}", response=_resp(401), body=None), "Key 无效"),
-        (openai.RateLimitError("quota", response=_resp(429), body=None), "额度"),
-        (openai.APIStatusError("pay", response=_resp(402), body=None), "额度用完"),
+        (openai.RateLimitError("quota", response=_resp(429), body=None), "请求太频繁"),
+        (openai.APIStatusError("pay", response=_resp(402), body=None), "账户余额不足"),
         (openai.NotFoundError("no model", response=_resp(404), body=None), "模型名"),
-        (openai.APITimeoutError(request=httpx.Request("POST", "https://x")), "超时"),
-        (openai.APIConnectionError(request=httpx.Request("POST", "https://x")), "网络不通"),
-        (RuntimeError(f"boom {SECRET}"), "测试失败"),
+        (openai.APITimeoutError(request=httpx.Request("POST", "https://x")), "联网失败"),
+        (openai.APIConnectionError(request=httpx.Request("POST", "https://x")), "联网失败"),
+        (RuntimeError(f"boom {SECRET}"), "教练服务出错"),
     ],
 )
 def test_test_key_errors_are_chinese_and_leak_nothing(exc, reason, caplog):
@@ -212,7 +212,7 @@ def test_test_key_errors_are_chinese_and_leak_nothing(exc, reason, caplog):
 def test_test_key_without_key_makes_no_request():
     calls: list = []
     r = keycheck.test_key("", "https://api.example.com", "m", client_factory=_factory(calls=calls))
-    assert r == {"ok": False, "reason_zh": "还没填 Key", "ms": None} and calls == []
+    assert r == {"ok": False, "kind": "no_key", "reason_zh": "还没填 Key", "ms": None} and calls == []
 
 
 def test_bridge_test_key_uses_mocked_client(envfile, monkeypatch, caplog):
@@ -229,7 +229,8 @@ def test_bridge_test_key_uses_mocked_client(envfile, monkeypatch, caplog):
     b.reload_env()
     r = b.test_key()
     assert seen["api_key"] == SECRET and seen["max_retries"] == 0  # went to the (fake) client only
-    assert r == {"ok": False, "reason_zh": "Key 无效或没有权限", "ms": None}
+    assert r == {"ok": False, "kind": "auth", "reason_zh": "Key 无效或已过期", "ms": None}
+    assert b._coach_err["reason_zh"] == "Key 无效或已过期"  # the home card shows it too
     assert SECRET not in json.dumps(b._last_test) and SECRET not in caplog.text
     assert envfile.read_bytes() == before
 

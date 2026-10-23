@@ -542,7 +542,9 @@ class DoDoClawService:
             self.knowledge_enabled = True
         return self._knowledge.sync(force=force)
 
-    def ask(self, question: str, speak: bool = True) -> str:
+    def ask(self, question: str, speak: bool = True, raise_errors: bool = False) -> str:
+        """Coach answer. raise_errors=True re-raises LLM failures (the web UI turns
+        them into a Chinese reason); otherwise the failure text is returned."""
         question = (question or "").strip()
         if not question:
             return ""
@@ -574,6 +576,8 @@ class DoDoClawService:
                     answer = answer + "\n\n" + draft_ctx[:800]
         except Exception as exc:
             logger.exception("coach failed")
+            if raise_errors:
+                raise
             answer = f"教练调用失败: {exc}"
 
         logger.info("answer: %s", (answer or "")[:160])

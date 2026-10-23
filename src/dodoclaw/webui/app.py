@@ -153,6 +153,7 @@ class Bridge:
         self._answer: dict[str, Any] = {}
         self._alert: dict[str, Any] = {}
         self._error = ""
+        self._coach_err: dict[str, Any] = {}  # {kind, reason_zh} of the last failed coach call
         self._last_ask_ms: int | None = None
         # settings page
         from dodoclaw.paths import app_dir
@@ -192,6 +193,8 @@ class Bridge:
         items = [i.get("name", "") for i in snap.items[:6]]
         alert = self._alert if self._alert and time.time() - self._alert["at"] < 8 else {}
         key_ok = bool((svc.coach.api_key or "").strip())
+        cerr = self._coach_err
+        coach_error = {"kind": cerr["kind"], "reason_zh": cerr["reason_zh"]} if cerr and key_ok else None
         return {
             "gsi": {
                 "online": online,
@@ -217,7 +220,7 @@ class Bridge:
             "items": [x for x in items if x and x != "empty"],
             "items_zh": [item_zh(x) for x in items if x and x != "empty"],
             "timers": self._timers.compute(snap.clock_time) if snap.in_game else [],
-            "coach": {"provider": svc.provider_name, "model": svc.coach.model, "key_ok": key_ok},
+            "coach": {"provider": svc.provider_name, "model": svc.coach.model, "key_ok": key_ok, "error": coach_error},
             "voice": {
                 "tts": svc.tts_backend,
                 "stt": svc.stt_backend,
@@ -246,23 +249,33 @@ class Bridge:
 
         def work() -> None:
             try:
-                ans = self._svc.ask(text, speak=False) or "（空回复，请检查模型 / 额度）"
+                ans = self._svc.ask(text, speak=False, raise_errors=True) or "（空回复，请检查模型 / 额度）"
                 self._answer = {
                     "q": text,
                     "text": ans,
                     "clock": self._svc.snapshot().clock_mmss,
                     "ms": int((time.time() - t0) * 1000),
                 }
+                if (self._svc.coach.api_key or "").strip():
+                    self._coach_err = {}  # a real answer came back: the card goes back to normal
                 if voice:
                     self._speaker.say(ans)
             except Exception as exc:
-                logger.exception("ask failed")
-                self._error = str(exc)[:200]
+                self._set_coach_error(exc)
             finally:
                 self._busy = False
 
         threading.Thread(target=work, name="ask", daemon=True).start()
         return True
+
+    def _set_coach_error(self, exc: BaseException) -> None:
+        """Remember a failed coach call as a Chinese reason (never the exception text)."""
+        from dodoclaw.coach.errors import classify
+
+        err = classify(exc)
+        logger.warning("coach call failed: %s (%s)", err["kind"], type(exc).__name__)
+        self._coach_err = {"kind": err["kind"], "reason_zh": err["reason_zh"], "at": time.time()}
+        self._error = err["reason_zh"]
 
     def listen(self) -> bool:
         if self._busy:
@@ -447,6 +460,7 @@ class Bridge:
         except Exception:
             logger.exception("reload llm failed")
         self._last_test = {}
+        self._coach_err = {}  # the key may have changed; the auto-test will report again
         return {"key": self._key_status(), "keys": keycheck.env_flags()}
 
     def test_key(self) -> dict[str, Any]:
@@ -458,6 +472,10 @@ class Bridge:
             c.api_key or "", c.base_url, c.model, extra_body=chat_extra_body(self._svc.provider_id, c.model)
         )
         self._last_test = {**res, "at": time.time()}
+        if res.get("ok"):
+            self._coach_err = {}
+        elif res.get("kind") != "no_key":
+            self._coach_err = {"kind": res["kind"], "reason_zh": res["reason_zh"], "at": time.time()}
         return res
 
     def open_key_page(self) -> bool:

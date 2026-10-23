@@ -69,30 +69,6 @@ def key_status(provider_id: str, provider_name: str, api_key: str) -> dict[str, 
     }
 
 
-def _reason_for(exc: BaseException) -> str:
-    try:
-        import openai
-    except Exception:  # pragma: no cover
-        openai = None  # type: ignore[assignment]
-    if openai is not None:
-        if isinstance(exc, (openai.AuthenticationError, openai.PermissionDeniedError)):
-            return "Key 无效或没有权限"
-        if isinstance(exc, openai.RateLimitError):
-            return "额度用完或请求太频繁"
-        if isinstance(exc, openai.NotFoundError):
-            return "模型名或接口地址不对"
-        if isinstance(exc, openai.APITimeoutError):
-            return "连接超时，检查一下网络"
-        if isinstance(exc, openai.APIConnectionError):
-            return "网络不通，连不上服务商"
-        if isinstance(exc, openai.APIStatusError):
-            code = getattr(exc, "status_code", None)
-            if code == 402:
-                return "额度用完了，去服务商那里充值"
-            return f"服务商返回错误（{code}）"
-    return "测试失败，详情见日志"
-
-
 def test_key(
     api_key: str,
     base_url: str,
@@ -102,9 +78,11 @@ def test_key(
     timeout: float = 15.0,
     extra_body: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """One tiny chat completion. Returns {ok, reason_zh, ms} — never the key."""
+    """One tiny chat completion. Returns {ok, kind, reason_zh, ms} — never the key."""
+    from dodoclaw.coach.errors import NO_KEY, classify
+
     if not (api_key or "").strip():
-        return {"ok": False, "reason_zh": "还没填 Key", "ms": None}
+        return {"ok": False, "kind": "no_key", "reason_zh": NO_KEY, "ms": None}
     if client_factory is None:
         from openai import OpenAI as client_factory  # noqa: N813
     t0 = time.time()
@@ -119,5 +97,6 @@ def test_key(
     except Exception as exc:
         # class name + status only; exception text can echo part of the key
         logger.warning("key test failed: %s status=%s", type(exc).__name__, getattr(exc, "status_code", None))
-        return {"ok": False, "reason_zh": _reason_for(exc), "ms": None}
-    return {"ok": True, "reason_zh": "连接正常", "ms": int((time.time() - t0) * 1000)}
+        err = classify(exc)
+        return {"ok": False, "kind": err["kind"], "reason_zh": err["reason_zh"], "ms": None}
+    return {"ok": True, "kind": "ok", "reason_zh": "连接正常", "ms": int((time.time() - t0) * 1000)}

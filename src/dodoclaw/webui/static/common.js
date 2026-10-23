@@ -53,7 +53,8 @@ function chip(el, cls, text) { if (el) el.innerHTML = `<span class="dot ${cls}">
 function renderTopbar(s) {
   const g = s.gsi;
   chip($('#chip-gsi'), g.online ? 'ok' : 'warn', g.online ? 'Dota 已连接' : '等待 Dota');
-  chip($('#chip-coach'), s.coach.key_ok ? 'ok' : 'warn', s.coach.key_ok ? `教练 · ${s.coach.provider}` : '教练 · 未配置');
+  chip($('#chip-coach'), s.coach.key_ok && !s.coach.error ? 'ok' : 'warn', s.coach.key_ok ? `教练 · ${s.coach.provider}` : '教练 · 未配置');
+  const cc = $('#chip-coach'); if (cc) cc.title = s.coach.error ? s.coach.error.reason_zh : '';
   const ttsOff = s.voice.tts === 'mock';
   const v = $('#chip-voice');
   if (v) {
@@ -69,7 +70,12 @@ function wireChrome(getState) {
   on('#btn-close', () => api().close());
   on('#btn-ov', () => api().toggle_overlay());
   on('#chip-gsi', () => { location.href = SET.adv; });
-  on('#chip-coach', () => { const s = getState(); if (s && !s.coach.key_ok) toast('教练还没配 Key，提醒照常工作', { icon: 'alert', href: SET.coach }); else location.href = SET.coach; });
+  on('#chip-coach', () => {
+    const s = getState();
+    if (s && !s.coach.key_ok) toast('教练还没配 Key，提醒照常工作', { icon: 'alert', href: SET.coach });
+    else if (s && s.coach.error) toast(s.coach.error.reason_zh, { icon: 'alert', href: SET.coach });
+    else location.href = SET.coach;
+  });
   on('#chip-voice', () => { const s = getState(); if (s && s.voice.tts === 'mock') toast('还没配语音播报，提醒先只在小窗显示', { icon: 'alert', href: SET.voice }); else location.href = SET.voice; });
   document.querySelectorAll('.rail a.soon').forEach(a => a.onclick = () => toast('这个页面还在做，先用首页'));
 }
