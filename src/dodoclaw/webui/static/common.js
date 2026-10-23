@@ -53,14 +53,17 @@ function chip(el, cls, text) { if (el) el.innerHTML = `<span class="dot ${cls}">
 function renderTopbar(s) {
   const g = s.gsi;
   chip($('#chip-gsi'), g.online ? 'ok' : 'warn', g.online ? 'Dota 已连接' : '等待 Dota');
-  chip($('#chip-coach'), s.coach.key_ok && !s.coach.error ? 'ok' : 'warn', s.coach.key_ok ? `教练 · ${s.coach.provider}` : '教练 · 未配置');
-  const cc = $('#chip-coach'); if (cc) cc.title = s.coach.error ? s.coach.error.reason_zh : '';
-  const ttsOff = s.voice.tts === 'mock';
+  const c = s.coach;
+  // 教练: 未配置 = warn, 连接失败 = err (README D10)
+  chip($('#chip-coach'), !c.key_ok ? 'warn' : c.error ? 'err' : 'ok', !c.key_ok ? '教练 · 未配置' : c.error ? '教练 · 连接失败' : `教练 · ${c.provider}`);
+  const cc = $('#chip-coach'); if (cc) cc.title = c.error ? c.error.reason_zh : '';
   const v = $('#chip-voice');
   if (v) {
-    // status dot like the other chips: green = configured, grey = 未配置
-    v.innerHTML = `<span class="dot ${ttsOff ? 'mute' : 'ok'}"></span><svg class="ico" style="width:14px;height:14px"><use href="#${ttsOff ? 'vol-off' : 'vol'}"/></svg><span>${ttsOff ? '播报 · 未配置' : '播报'}</span>`;
-    v.classList.toggle('off', ttsOff); v.title = ttsOff ? '去设置配置播报' : `播报 · ${s.voice.tts_zh}`;
+    const miss = s.voice.tts_available === false, ttsOff = miss || s.voice.tts === 'mock';
+    // status dot like the other chips: green = on, grey = 未配置, amber = 缺少组件
+    const txt = miss ? '播报 · 缺少组件' : ttsOff ? '播报 · 未配置' : '播报';
+    v.innerHTML = `<span class="dot ${miss ? 'warn' : ttsOff ? 'mute' : 'ok'}"></span><svg class="ico" style="width:14px;height:14px"><use href="#${ttsOff ? 'vol-off' : 'vol'}"/></svg><span>${txt}</span>`;
+    v.classList.toggle('off', ttsOff); v.title = miss ? '缺少声音组件，提醒照常显示，只是不念出来' : ttsOff ? '去设置配置播报' : `播报 · ${s.voice.tts_zh}`;
   }
 }
 // Window buttons, chips and rail entries. Nothing here is a dead click.
@@ -76,6 +79,11 @@ function wireChrome(getState) {
     else if (s && s.coach.error) toast(s.coach.error.reason_zh, { icon: 'alert', href: SET.coach });
     else location.href = SET.coach;
   });
-  on('#chip-voice', () => { const s = getState(); if (s && s.voice.tts === 'mock') toast('还没配语音播报，提醒先只在小窗显示', { icon: 'alert', href: SET.voice }); else location.href = SET.voice; });
+  on('#chip-voice', () => {
+    const s = getState();
+    if (s && s.voice.tts_available === false) toast('缺少声音组件，换最新安装包即可恢复', { icon: 'alert', href: SET.voice });
+    else if (s && s.voice.tts === 'mock') toast('还没配语音播报，提醒先只在小窗显示', { icon: 'alert', href: SET.voice });
+    else location.href = SET.voice;
+  });
   document.querySelectorAll('.rail a.soon').forEach(a => a.onclick = () => toast('这个页面还在做，先用首页'));
 }

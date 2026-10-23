@@ -92,3 +92,59 @@ html,body{height:100%;background:var(--bg-0);overflow:hidden;user-select:none}
 /* 可滚动区域的细滚动条 */
 .scroll{overflow:auto}.scroll::-webkit-scrollbar{width:6px}.scroll::-webkit-scrollbar-thumb{background:rgba(255,255,255,.1);border-radius:3px}
 .fadebot{-webkit-mask-image:linear-gradient(180deg,#000 calc(100% - 24px),transparent)}
+/* ===== D10：服务商下拉 + Key 输入（design/v2/shell.css 同名段落；设置页和向导共用） ===== */
+.pill.tiny{height:18px;padding:0 7px;font-size:10px}
+.field.dd{cursor:pointer;position:relative}
+.field.dd:hover{border-color:rgba(255,255,255,.2)}
+.field.dd:focus-visible{outline:none;border-color:rgba(255,138,61,.6)}
+.field.dd.open{border-color:rgba(255,138,61,.6);box-shadow:0 0 0 3px rgba(229,72,47,.18)}
+.field.dd .caret{transition:transform var(--dur-1)}
+.field.dd.open .caret{transform:rotate(180deg);color:var(--brand-2)}
+.ddmenu{position:absolute;z-index:8;width:470px;padding:6px;border-radius:12px;background:var(--glass-strong);border:1px solid var(--line-2);box-shadow:0 18px 50px rgba(0,0,0,.65);backdrop-filter:blur(18px) saturate(140%)}
+.ddmenu[hidden]{display:none}
+.ddmenu .mi{display:flex;align-items:center;gap:10px;min-height:46px;padding:6px 10px;border-radius:9px;cursor:pointer}
+.ddmenu .mi:hover,.ddmenu .mi.hov{background:rgba(255,255,255,.06)}
+.ddmenu .mi.cur{background:linear-gradient(135deg,rgba(229,72,47,.16),rgba(255,255,255,.02) 70%);box-shadow:inset 0 0 0 1px rgba(255,138,61,.3)}
+.ddmenu .ck{width:16px;height:16px;color:var(--brand-2);stroke-width:2.6;visibility:hidden;flex:none}.ddmenu .mi.cur .ck{visibility:visible}
+.ddmenu .nm{font-size:13.5px;font-weight:700;display:flex;align-items:center;gap:6px;white-space:nowrap}
+.ddmenu .ds{font-size:11.5px;color:var(--text-3);white-space:nowrap;display:flex;align-items:center;gap:6px}
+.ddmenu .ds .dot{width:6px;height:6px}
+.ddmenu .ap{margin-left:auto;font-size:12px;flex:none}
+.ddmenu .ft{margin:4px 4px 2px;padding:8px 6px 2px;border-top:1px solid var(--line);font-size:11.5px;color:var(--text-3)}
+/* Key 输入框：type=password，只在保存前可以点眼睛看自己输入的内容 */
+.pw{display:flex;align-items:center;gap:8px;height:38px;padding:0 6px 0 12px;border-radius:9px;background:rgba(0,0,0,.28);border:1px solid var(--line-2);flex:1;min-width:0}
+.pw>.ico{width:15px;height:15px;color:var(--text-3);flex:none}
+.pw input{flex:1;min-width:0;height:100%;background:transparent;border:0;outline:0;color:var(--text);font:13px var(--font);letter-spacing:1px;user-select:text}
+.pw input[type=password]{letter-spacing:2px}
+.pw input::placeholder{color:var(--text-3);letter-spacing:0}
+.pw .eye{width:30px;height:30px;border-radius:7px;display:flex;align-items:center;justify-content:center;color:var(--text-3);cursor:pointer;flex:none}
+.pw .eye:hover{background:rgba(255,255,255,.06);color:var(--text)}.pw .eye .ico{width:16px;height:16px}
+.pw:focus-within,.pw.focus{border-color:rgba(255,138,61,.6);box-shadow:0 0 0 3px rgba(229,72,47,.18)}
+.pw.dis{opacity:.6}.pw.dis .eye{display:none}
+/* 已保存后的 Key 框：只有状态，没有任何 Key 字符 */
+.kset{display:flex;align-items:center;gap:10px;height:38px;padding:0 12px;border-radius:9px;background:rgba(0,0,0,.28);border:1px solid var(--line-2);flex:1;min-width:0;white-space:nowrap;overflow:hidden}
+.kset>.ico{width:15px;height:15px;color:var(--text-3)}
+.kset .muted{font-size:12px;overflow:hidden;text-overflow:ellipsis}
+/* 按钮里的小转圈 */
+.spin-s{width:13px;height:13px;border-radius:50%;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;animation:spin 0.9s linear infinite;flex:none;display:inline-block}
+.pill .spin-s{width:10px;height:10px;border-color:rgba(255,255,255,.15);border-top-color:var(--text-2)}
+@keyframes spin{to{transform:rotate(360deg)}}
+.reduce-motion .spin-s{animation:none;border-color:rgba(255,255,255,.5)}
+.btn.busy{opacity:.75;pointer-events:none}
+/* 不能点的按钮：看起来是灰的，但悬停/点击都会说明原因（PRD 6.6 不留死点击） */
+.btn.off{opacity:.5;cursor:not-allowed;box-shadow:none}
+/* 测试失败 / 提示说明块 */
+.callout{display:flex;gap:12px;align-items:flex-start;padding:10px 14px;border-radius:10px;flex:1;min-width:0}
+.callout>.ico{width:17px;height:17px;margin-top:2px;flex:none}
+.callout .t{font-weight:800;font-size:13.5px}.callout .d{font-size:12px;color:var(--text-2);line-height:1.6;margin-top:2px}
+.callout .acts{display:flex;gap:8px;align-items:center;margin-left:auto;flex:none;align-self:center}
+.callout.err{background:rgba(255,93,108,.07);border:1px solid rgba(255,93,108,.3)}.callout.err>.ico{color:var(--danger)}
+.callout.info{background:rgba(98,168,255,.06);border:1px solid rgba(98,168,255,.22)}.callout.info>.ico{color:var(--info)}
+/* 缺组件的字段 */
+.field.warnf{border-color:rgba(255,190,85,.35);background:rgba(255,190,85,.06);color:var(--warn)}
+.field.warnf .ico{color:var(--warn)}
+/* 折叠区 */
+.disc{display:flex;align-items:center;gap:8px;padding:8px 0 0;border-top:1px solid var(--line);font-size:12.5px;color:var(--text-2);cursor:pointer;user-select:none}
+.disc>.ico{width:14px;height:14px;color:var(--text-3);transform:rotate(-90deg);transition:transform var(--dur-1)}
+.disc.open>.ico{transform:none}
+.disc .hint{margin-left:6px}

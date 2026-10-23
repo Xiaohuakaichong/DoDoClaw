@@ -49,8 +49,6 @@
 .rr .gl.warm{background:rgba(255,138,61,.12);color:var(--brand-2)}.rr .gl.gold{background:rgba(243,194,107,.12);color:var(--gold)}
 .foot{margin-top:10px;font-size:11.5px;color:var(--text-3);display:flex;gap:14px}
 /* 教练 / 语音 */
-.keybox{display:flex;align-items:center;gap:10px;height:38px;padding:0 12px;border-radius:9px;background:rgba(0,0,0,.28);border:1px solid var(--line-2);flex:1}
-.keybox .ico{width:15px;height:15px;color:var(--text-3)}
 .card.warnc{border-color:rgba(255,190,85,.28);background:linear-gradient(135deg,rgba(255,190,85,.08),rgba(255,255,255,.012) 60%)}
 .opt{flex:1;border-radius:10px;border:1px solid var(--line-2);padding:10px 12px;background:rgba(0,0,0,.2);cursor:pointer}
 .opt .t{font-weight:700;font-size:13px;display:flex;align-items:center;gap:6px}.opt .d{font-size:11.5px;color:var(--text-3);margin-top:2px}
@@ -77,12 +75,21 @@
 /* 实现版补充 */
 .page{padding:6px 24px 24px 8px}
 .rail a{text-decoration:none}
-html:not(.key-none) .k-none,html.key-none .k-env{display:none!important}
-.keybox.warnk{border-color:rgba(255,190,85,.35);background:rgba(255,190,85,.06)}.keybox.warnk .ico{color:var(--warn)}
 .opt.sel{border-color:rgba(255,138,61,.55);background:linear-gradient(135deg,rgba(229,72,47,.12),rgba(0,0,0,.2) 70%);box-shadow:inset 0 0 0 1px rgba(255,138,61,.25)}
 .opt .tag{margin-left:auto}.opt.dis{opacity:.5;pointer-events:none}
-/* 服务商: read-only text, no dropdown affordance */
-.field.ro{cursor:default;user-select:text}.field.ro:hover,.field.ro:focus{border-color:var(--line-2);box-shadow:none;outline:none}
+/* 教练卡（D10）：Key 行/结果行按状态显示，状态由 settings.js 设在 #c-coach[data-ks] 上 */
+#c-coach .ks{display:none}
+#c-coach[data-ks=none] .ks-none,#c-coach[data-ks=switch] .ks-none,#c-coach[data-ks=typing] .ks-typing,#c-coach[data-ks=testing] .ks-testing,
+#c-coach[data-ks=ok] .ks-set,#c-coach[data-ks=error] .ks-set,#c-coach[data-ks=retest] .ks-set{display:flex}
+#c-coach[data-ks=none] .ks-pw,#c-coach[data-ks=switch] .ks-pw,#c-coach[data-ks=typing] .ks-pw,#c-coach[data-ks=testing] .ks-pw{display:flex}
+#c-coach.changing .ks-cancel{display:inline-flex}
+#prov-model{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+#key-res{min-width:0}
+.env-body{display:none;padding:8px 0 2px 22px}.env-body.open{display:block}
+.envl{display:flex;align-items:center;gap:10px;font-size:12.5px;white-space:nowrap}.envl+.envl{margin-top:8px}
+/* 缺少声音组件（README D10 #coach,tts-missing） */
+html:not(.st-tts-missing) .tts-miss,html.st-tts-missing .tts-ok{display:none!important}
+#tts-name .tn{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 /* 语音提问关闭时：识别方式与快捷键不可用 */
 #c-voice.ask-off .opt{opacity:.5;pointer-events:none}
 #c-voice.ask-off .hk{opacity:.5;pointer-events:none;filter:grayscale(1)}
@@ -125,6 +132,8 @@ a.link{text-decoration:none}
 <symbol id="cube" viewBox="0 0 24 24"><path d="M12 2l9 5v10l-9 5-9-5V7z"/><path d="M12 12l9-5M12 12v10M12 12L3 7"/></symbol>
 <symbol id="coin" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v10M9 9.5h4.5a2 2 0 0 1 0 4H10a2 2 0 0 0 0 4h5"/></symbol>
 <symbol id="spark" viewBox="0 0 24 24"><path d="M12 3l2.2 6.8L21 12l-6.8 2.2L12 21l-2.2-6.8L3 12l6.8-2.2z"/></symbol>
+<symbol id="eye" viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></symbol>
+<symbol id="eye-off" viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7c2 0 3.7.7 5.1 1.6M22 12s-3.6 7-10 7c-2 0-3.7-.7-5.1-1.6"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2M3 3l18 18"/></symbol>
 <symbol id="key" viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M17 6l3 3M15 8l2 2"/></symbol>
 <symbol id="check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7"/></symbol>
 <symbol id="plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
@@ -169,7 +178,7 @@ a.link{text-decoration:none}
  <nav class="glass snav">
   <span class="label">设置</span>
   <a data-s="rem"><svg class="ico"><use href="#clock"/></svg>提醒</a>
-  <a data-s="coach"><svg class="ico"><use href="#chat"/></svg><span style="white-space:nowrap">教练与语音</span><span class="dot warn k-none" style="margin-left:auto"></span></a>
+  <a data-s="coach"><svg class="ico"><use href="#chat"/></svg><span style="white-space:nowrap">教练与语音</span><span class="dot warn" id="snav-coach-dot" style="margin-left:auto;display:none"></span></a>
   <a data-s="overlay"><svg class="ico"><use href="#layers"/></svg>小窗与动效</a>
   <a data-s="adv"><svg class="ico"><use href="#key"/></svg>高级</a>
   <a data-s="about"><svg class="ico"><use href="#info"/></svg>关于</a>
@@ -194,21 +203,42 @@ a.link{text-decoration:none}
 
  <!-- ===== 教练与语音 ===== -->
  <section class="glass pane" id="p-coach">
-  <div class="ptop"><div><div class="ph1">教练与语音</div><div class="sub">Key 从 exe 同目录的 .env 读取，这里不会显示 Key 本身。</div></div><span class="saved"><svg class="ico"><use href="#check"/></svg>已保存</span></div>
-  <div class="card" id="c-coach">
-   <div class="ch"><span class="gl gi" style="background:rgba(229,72,47,.12);color:var(--brand-2)"><svg class="ico"><use href="#chat"/></svg></span><div><div class="t">AI 教练</div><div class="d">提问和赛后建议要用；不配也能用全部提醒</div></div><div class="r"><span class="pill ok k-env"><span class="dot ok"></span>已配置</span><span class="pill warn k-none"><span class="dot warn"></span>未配置</span></div></div>
-   <div style="margin-top:12px">
-    <div class="row"><span class="k">服务商</span><div class="v"><div class="field ro" id="prov" style="width:280px" aria-readonly="true"><span id="prov-name">—</span></div><span class="hint">在 config\settings.yaml 里切换服务商</span></div></div>
-    <div class="row k-env"><span class="k">API Key</span><div class="v"><div class="keybox"><svg class="ico"><use href="#key"/></svg><span>已配置</span><span class="muted" style="font-size:12px">· 读取自 .env</span></div><span class="btn ghost sm" id="btn-test">测试</span><span class="btn ghost sm" data-act="open_app_dir"><svg class="ico" style="width:14px;height:14px"><use href="#folder"/></svg>打开文件夹</span><span class="btn ghost sm" data-act="reload_env" title="改完 .env 后点这里"><svg class="ico" style="width:14px;height:14px"><use href="#refresh"/></svg>重新读取</span></div></div>
-    <div class="row k-env"><span class="k">上次测试</span><div class="v" id="test-res"><span class="pill mute">还没测试</span><span class="hint">点“测试”发一条很短的请求试试</span></div></div>
-    <div class="row k-none"><span class="k">API Key</span><div class="v"><div class="keybox warnk"><svg class="ico"><use href="#key"/></svg><span>未配置</span><span class="muted" style="font-size:12px">· 在 exe 同目录的 .env 里填写</span></div><span class="btn primary sm" data-act="open_app_dir"><svg class="ico" style="width:14px;height:14px"><use href="#folder"/></svg>打开文件夹</span><span class="btn ghost sm" data-act="reload_env"><svg class="ico" style="width:14px;height:14px"><use href="#refresh"/></svg>重新读取</span></div></div>
-    <div class="row k-none"><span class="k">怎么填</span><div class="v"><span class="mono" style="flex:none" id="key-line">LLM_API_KEY=你的Key</span><span class="t2" style="white-space:nowrap">加这一行，保存后点“重新读取”，不用重启</span><span class="link" id="btn-apply" style="margin-left:auto;font-size:12px">去申请 <svg class="ico" style="width:12px;height:12px"><use href="#ext"/></svg></span></div></div>
+  <div class="ptop"><div><div class="ph1">教练与语音</div><div class="sub">选服务商、粘贴 Key，点“保存并测试”就能用。Key 只保存在这台电脑上，不会显示出来。</div></div><span class="saved"><svg class="ico"><use href="#check"/></svg>已保存</span></div>
+  <div class="card" id="c-coach" data-ks="none">
+   <div class="ch"><span class="gl gi" style="background:rgba(229,72,47,.12);color:var(--brand-2)"><svg class="ico"><use href="#chat"/></svg></span><div><div class="t">AI 教练</div><div class="d">提问和赛后建议要用；不配也能用全部提醒</div></div><div class="r" id="coach-pill"></div></div>
+   <div style="margin-top:10px">
+    <!-- 服务商：选中即写 settings.yaml 的 coach.provider + coach.model，马上生效 -->
+    <div class="row" style="position:relative"><span class="k">服务商</span><div class="v">
+     <div class="field dd" id="dd-prov" style="width:280px" tabindex="0" role="button" aria-haspopup="listbox" aria-expanded="false"><span id="prov-name" style="white-space:nowrap">—</span><span id="prov-tag"></span><svg class="ico caret" style="width:14px;height:14px;margin-left:auto"><use href="#down"/></svg></div>
+     <span class="hint" id="prov-model" title="每家用默认模型，一般不用改"></span>
+     <span class="link" id="btn-apply" style="margin-left:auto;font-size:12px;flex:none"></span>
+    </div>
+     <div class="ddmenu" id="prov-menu" role="listbox" aria-label="服务商" style="left:144px;top:46px" hidden></div>
+    </div>
+    <!-- API Key：只从这里进 Python（save_key），不会再显示出来 -->
+    <div class="row"><span class="k">API Key</span><div class="v">
+     <label class="pw ks ks-pw" id="key-box"><svg class="ico"><use href="#key"/></svg><input id="key-in" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="512" placeholder="粘贴 API Key"><span class="eye" id="btn-eye" role="button" title="显示输入内容（只在保存前可看）"><svg class="ico"><use href="#eye"/></svg></span></label>
+     <div class="kset ks ks-set"><svg class="ico"><use href="#key"/></svg><span id="kset-pill"></span><span class="muted">只保存在这台电脑上，不会显示出来</span></div>
+     <span class="btn primary sm ks ks-pw" id="btn-savekey">保存并测试</span>
+     <span class="btn ghost sm ks ks-cancel" id="btn-cancel">取消</span>
+     <span class="btn ghost sm ks ks-set" id="btn-test"><svg class="ico" style="width:14px;height:14px"><use href="#refresh"/></svg>重新测试</span>
+     <span class="btn ghost sm ks ks-set" id="btn-change">更换 Key</span>
+    </div></div>
+    <!-- 说明 / 测试结果 -->
+    <div class="row"><span class="k" id="res-k">说明</span><div class="v" id="key-res"></div></div>
+    <!-- 备用入口：手动编辑 .env（默认折叠） -->
+    <div class="disc" id="disc-env" role="button" aria-expanded="false"><svg class="ico"><use href="#down"/></svg>高级：手动编辑 .env<span class="hint">从旧版本迁移，或想自己管理 Key 时用</span></div>
+    <div class="env-body" id="env-body">
+     <div class="envl"><span class="t2">在 exe 同目录的 .env 里加一行</span><span class="mono" style="flex:none" id="key-line">LLM_API_KEY=你的Key</span><span class="hint">变量名跟着当前服务商变</span></div>
+     <div class="envl"><span class="btn ghost sm" data-act="open_app_dir"><svg class="ico" style="width:14px;height:14px"><use href="#folder"/></svg>打开文件夹</span><span class="btn ghost sm" data-act="reload_env"><svg class="ico" style="width:14px;height:14px"><use href="#refresh"/></svg>重新读取</span><span class="hint">改完点“重新读取”，不用重启</span></div>
+    </div>
    </div>
   </div>
   <div class="card" id="c-tts">
-   <div class="ch"><span class="gl gi"><svg class="ico"><use href="#vol"/></svg></span><div><div class="t">语音播报</div><div class="d">提醒和回答念出来；Edge 免费声音不需要 Key</div></div><div class="r"><span class="pill" id="tts-pill"></span><i class="sw" id="sw-tts"></i></div></div>
+   <div class="ch"><span class="gl gi tts-ok"><svg class="ico"><use href="#vol"/></svg></span><span class="gl gi tts-miss" style="background:rgba(255,190,85,.1);color:var(--warn)"><svg class="ico"><use href="#vol-off"/></svg></span><div><div class="t">语音播报（TTS）</div><div class="d">提醒和回答念出来；Edge 免费声音不需要 Key</div></div><div class="r"><span class="pill tts-ok" id="tts-pill"></span><span class="pill warn tts-miss"><span class="dot warn"></span>缺少声音组件</span><i class="sw" id="sw-tts" role="switch"></i></div></div>
    <div style="margin-top:8px">
-    <div class="row"><span class="k">声音</span><div class="v"><div class="field" style="width:280px" id="tts-name">—</div><span class="btn ghost sm" id="btn-preview"><svg class="ico" style="width:14px;height:14px"><use href="#vol"/></svg>试听</span></div></div>
+    <div class="row tts-ok"><span class="k">声音</span><div class="v"><div class="field" style="width:280px" id="tts-name">—</div><span class="btn ghost sm" id="btn-preview"><svg class="ico" style="width:14px;height:14px"><use href="#vol"/></svg>试听</span></div></div>
+    <div class="row tts-miss"><span class="k">声音</span><div class="v"><div class="field warnf" style="width:280px;white-space:nowrap" title="这个版本没打包 Edge TTS"><svg class="ico" style="width:15px;height:15px"><use href="#alert"/></svg><b style="font-size:13px">缺少声音组件</b><span style="font-size:12px;color:var(--text-3)">· 没打包 Edge TTS</span></div><span class="btn ghost sm off" id="btn-preview-off" aria-disabled="true" title="缺少声音组件，试听不了"><svg class="ico" style="width:14px;height:14px"><use href="#vol"/></svg>试听</span><span class="hint" style="margin-left:auto;text-align:right;white-space:nowrap">提醒照常显示，只是不念出来<br>换最新安装包即可恢复</span></div></div>
    </div>
   </div>
   <div class="card" id="c-voice">
