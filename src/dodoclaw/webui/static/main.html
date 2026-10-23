@@ -5,10 +5,10 @@ html,body{height:100%;background:var(--bg-0);overflow:hidden;user-select:none}
  radial-gradient(900px 500px at 78% -10%,rgba(229,72,47,.22),transparent 60%),
  radial-gradient(700px 500px at -10% 110%,rgba(98,168,255,.10),transparent 60%),var(--bg-0);
  display:grid;grid-template-columns:76px 1fr;grid-template-rows:44px 1fr}
-.tb{grid-column:1/3;display:flex;align-items:center;gap:10px;padding:0 0 0 18px;-webkit-app-region:drag}
+.tb{grid-column:1/3;display:flex;align-items:center;gap:10px;padding:0 0 0 18px}.tb .drag{flex:1;align-self:stretch;display:flex;align-items:center;gap:10px;min-width:0}.tb .drag *{pointer-events:none}
 .logo{width:26px;height:26px;border-radius:8px;background:var(--brand-grad);box-shadow:var(--brand-glow);display:flex;align-items:center;justify-content:center;font:700 15px var(--num);color:#fff}
 .tb .name{font:700 15px var(--num);letter-spacing:1.5px}
-.tb .stat{margin-left:auto;display:flex;gap:8px;-webkit-app-region:no-drag}
+.tb .stat{display:flex;gap:8px}
 .wc{display:flex;margin-left:12px}.wc span{width:46px;height:44px;display:flex;align-items:center;justify-content:center;color:var(--text-3)}
 .wc .ico{width:14px;height:14px}
 .rail{display:flex;flex-direction:column;align-items:center;gap:6px;padding-top:10px}
@@ -80,7 +80,8 @@ html,body{height:100%;background:var(--bg-0);overflow:hidden;user-select:none}
 .sample{position:absolute;left:150px;top:14px;font-size:10px;color:var(--text-3);opacity:.7}
 
 .wc span{cursor:pointer}.wc span:hover{color:var(--text);background:rgba(255,255,255,.06)}.wc span.x:hover{background:#c42b1c;color:#fff}
-.rail a{cursor:pointer}.rail a.soon{opacity:.45;cursor:default}
+.rail a{cursor:pointer}.rail a.soon{opacity:.45;cursor:pointer}
+#toast{position:fixed;left:50%;bottom:96px;transform:translate(-50%,8px);opacity:0;pointer-events:none;padding:10px 16px;border-radius:12px;background:var(--glass-strong,rgba(20,24,32,.95));border:1px solid var(--line-2,rgba(255,255,255,.12));box-shadow:0 12px 30px rgba(0,0,0,.5);font-size:13px;transition:opacity 160ms,transform 160ms;z-index:9}#toast.on{opacity:1;transform:translate(-50%,0)}
 .ask input{flex:1;background:transparent;border:0;outline:0;color:var(--text);font:14px var(--font)}
 .ask input::placeholder{color:var(--text-3)}
 .mic,.btn{cursor:pointer}.mic.live{background:var(--brand-grad);box-shadow:var(--brand-glow);color:#fff}
@@ -121,7 +122,7 @@ html,body{height:100%;background:var(--bg-0);overflow:hidden;user-select:none}
 <symbol id="spark" viewBox="0 0 24 24"><path d="M12 3l2.2 6.8L21 12l-6.8 2.2L12 21l-2.2-6.8L3 12l6.8-2.2z"/></symbol>
 </defs></svg>
 <div class="win">
- <div class="tb pywebview-drag-region"><div class="logo">D</div><span class="name">DODOCLAW</span>
+ <div class="tb"><div class="drag pywebview-drag-region"><div class="logo">D</div><span class="name">DODOCLAW</span></div>
   <div class="stat">
    <span class="chip" id="chip-gsi"><span class="dot warn"></span>等待 Dota</span>
    <span class="chip" id="chip-coach"><span class="dot warn"></span>教练</span>
@@ -163,4 +164,4 @@ html,body{height:100%;background:var(--bg-0);overflow:hidden;user-select:none}
  </main>
  <span class="proto">原型 · 英雄与物品图标 © Valve，运行时下载 · 非 Valve 官方</span>
 </div>
-<script src="common.js"></script><script src="main.js"></script></body></html>
+<div id="toast"></div><script src="common.js"></script><script src="main.js"></script></body></html>

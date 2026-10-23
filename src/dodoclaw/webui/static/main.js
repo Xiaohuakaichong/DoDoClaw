@@ -1,3 +1,4 @@
+let lastS = null;
 const HERO_CN = {}; // filled lazily later from hero_aliases.json (not in prototype)
 let lastHero = '';
 function chip(el, cls, text) { el.innerHTML = `<span class="dot ${cls}"></span>${esc(text)}`; }
@@ -66,10 +67,13 @@ onReady(() => {
   const send = () => { const v = $('#q').value.trim(); if (!v) return; api().ask(v, false); $('#q').value = ''; };
   $('#send').onclick = send;
   $('#q').addEventListener('keydown', e => { if (e.key === 'Enter') send(); });
-  $('#mic').onclick = () => api().listen();
+  $('#mic').onclick = async () => { if (!(await api().listen())) toast(lastS && lastS.voice && lastS.voice.stt === 'mock' ? '语音识别还没配置，先打字提问' : '正在处理上一个问题，稍等'); };
   $('#btn-min').onclick = () => api().minimize();
   $('#btn-close').onclick = () => api().close();
   $('#btn-ov').onclick = () => api().toggle_overlay();
   $('#rm').onclick = () => api().set_reduce_motion(!$('#rm').classList.contains('on'));
-  poll(render, 1000);
+  document.querySelectorAll('.rail a.soon').forEach(a => a.onclick = () => toast(`「${a.textContent.trim()}」页还在做，原型里先只有首页`));
+  poll(s => { lastS = s; render(s); }, 1000);
 });
+let toastT = 0;
+function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('on'), 2200); }
