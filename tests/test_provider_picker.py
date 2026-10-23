@@ -504,3 +504,87 @@ def test_tts_available_uses_find_spec(monkeypatch):
     assert tts_preview.tts_available() is False
     monkeypatch.setattr("importlib.util.find_spec", lambda name, *a: (_ for _ in ()).throw(ValueError("x")))
     assert tts_preview.tts_available() is False
+
+
+# ── 删除 Key（更换 Key → 删除 Key → 页内确认） ──────────────
+def test_delete_key_removes_only_the_active_line_without_backup(world, monkeypatch):
+    b, svc = world.b, world.svc
+    b.set_provider("deepseek")
+    monkeypatch.setattr(openai, "OpenAI", lambda **kw: _Client([]))
+    world.env.write_text(f"# 我的 Key\n# DEEPSEEK_API_KEY=commented-out\nSTEPFUN_API_KEY={OLD}\nGSI_PORT=3000\n", encoding="utf-8")
+    b.reload_env()
+    assert b.save_key("deepseek", SECRET)["configured"] is True
+    assert b.settings_state()["key"]["last_test"]["ok"] is True
+    r = b.delete_key("deepseek")
+    assert r == {"ok": True, "msg": ""}
+    # only the active DEEPSEEK line is gone; the comment, other keys and settings stay; no .bak
+    assert world.env.read_text(encoding="utf-8") == (
+        f"# 我的 Key\n# DEEPSEEK_API_KEY=commented-out\nSTEPFUN_API_KEY={OLD}\nGSI_PORT=3000\n"
+    )
+    assert sorted(p.name for p in world.env.parent.iterdir() if p.name.startswith(".env")) == [".env"]
+    # reloaded: the live coach has no key, 未配置 with an empty last test
+    assert "DEEPSEEK_API_KEY" not in os.environ and svc.coach.api_key == ""
+    k = b.settings_state()["key"]
+    assert k["configured"] is False and k["last_test"] == {}
+    rows = {p["id"]: p for p in b.list_providers()}
+    assert rows["deepseek"]["configured"] is False and rows["stepfun_plan"]["configured"] is True
+    assert SECRET not in json.dumps(r, ensure_ascii=False)
+
+
+def test_delete_shared_step_key_clears_both_step_entries(world):
+    b, svc = world.b, world.svc
+    b.reload_env()
+    assert b.delete_key("stepfun_plan")["ok"] is True
+    assert "STEPFUN_API_KEY" not in world.env.read_text(encoding="utf-8") and svc.coach.api_key == ""
+    rows = {p["id"]: p for p in b.list_providers()}
+    assert rows["stepfun_plan"]["configured"] is False and rows["stepfun"]["configured"] is False
+    assert rows["stepfun_plan"]["shares_key_with"] == ["stepfun"]  # the confirm text names both
+
+
+def test_delete_key_rejects_other_provider(world):
+    b = world.b
+    b.reload_env()
+    before = world.env.read_bytes()
+    for bad in ("deepseek", "moonshot", "", "evil"):
+        assert b.delete_key(bad) == {"ok": False, "msg": "服务商刚刚变了，请重新操作"}
+    assert world.env.read_bytes() == before and world.svc.coach.api_key == OLD
+
+
+def test_delete_key_reports_a_generic_key_still_in_use(world, monkeypatch):
+    b = world.b
+    b.set_provider("deepseek")
+    world.env.write_text(f"DEEPSEEK_API_KEY={SECRET}\nLLM_API_KEY=sk-generic-1234\n", encoding="utf-8")
+    b.reload_env()
+    r = b.delete_key("deepseek")
+    assert r["ok"] is True and "LLM_API_KEY" in r["msg"] and SECRET not in r["msg"]
+    assert world.env.read_text(encoding="utf-8") == "LLM_API_KEY=sk-generic-1234\n"
+
+
+def test_keystore_delete_key_only_for_known_vars(tmp_path, monkeypatch):
+    env = tmp_path / ".env"
+    env.write_text("PATH_LIKE=1\n", encoding="utf-8")
+    monkeypatch.setattr(keystore, "_store", keystore.EnvFileKeyStore(env))
+    with pytest.raises(keystore.KeyStoreError):
+        keystore.delete_key("PATH_LIKE")
+    assert env.read_text(encoding="utf-8") == "PATH_LIKE=1\n"
+
+
+# ── 快速切换：只有最后选中的服务商的测试结果会被记下 ──────────────
+def test_stale_test_from_before_a_switch_is_not_recorded(world, monkeypatch):
+    b = world.b
+    b.reload_env()  # stepfun_plan with OLD key
+
+    def slow_then_switch(**kw):
+        # the user switches provider while this request is still out
+        b.set_provider("deepseek")
+        return _Client([])
+
+    monkeypatch.setattr(openai, "OpenAI", slow_then_switch)
+    r = b.test_key()
+    assert r["ok"] is True and r["stale"] is True
+    k = b.settings_state()["key"]
+    assert k["provider"] == "deepseek" and k["last_test"] == {}  # the old provider's result is dropped
+    monkeypatch.setattr(openai, "OpenAI", lambda **kw: _Client([]))
+    b.set_provider("stepfun_plan")
+    r = b.test_key()
+    assert "stale" not in r and b.settings_state()["key"]["last_test"]["ok"] is True

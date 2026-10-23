@@ -490,6 +490,7 @@ class Bridge:
             logger.exception("reload llm failed")
         self._last_test = {}
         self._coach_err = {}  # the key may have changed; the auto-test will report again
+        self._coach_gen = getattr(self, "_coach_gen", 0) + 1
         return {"key": self._key_status(), "keys": keycheck.env_flags()}
 
     def _reload_coach(self) -> None:
@@ -499,6 +500,7 @@ class Bridge:
             logger.exception("reload llm failed")
         self._last_test = {}
         self._coach_err = {}
+        self._coach_gen = getattr(self, "_coach_gen", 0) + 1
 
     def _follow_provider_stt(self) -> str:
         """Speech recognition left on 跟随服务商 (stt_mode unset) follows a provider/key
@@ -610,6 +612,31 @@ class Bridge:
             "msg": stt_msg,
         }
 
+    def delete_key(self, provider_id: str) -> dict[str, Any]:
+        """更换 Key → 删除 Key (after the in-page confirm). Removes only the active
+        line of that provider's variable from .env (no backup), reloads, clears the
+        last test. Providers sharing the variable (阶跃 ×2) lose it too. Returns {ok, msg}."""
+        from dodoclaw.providers import get_provider
+        from dodoclaw.webui import keycheck, keystore
+
+        pid = str(provider_id or "")
+        if pid != self._svc.provider_id or pid not in keycheck.PICKER_IDS:
+            return {"ok": False, "msg": "服务商刚刚变了，请重新操作"}
+        spec = get_provider(pid)
+        try:
+            keystore.delete_key(spec.key_env)
+        except keystore.KeyStoreError as exc:
+            return {"ok": False, "msg": exc.reason_zh}
+        logger.info("deleted key for %s", spec.id)
+        self.reload_env()  # also clears last_test / coach error
+        self._switched_from = ""
+        msg = self._follow_provider_stt()
+        self._save_ui()
+        if (self._svc.coach.api_key or "").strip():
+            # e.g. the generic LLM_API_KEY line or a system environment variable
+            msg = "这一家的 Key 已删除，但还读到了通用 Key（LLM_API_KEY），教练仍能回答；要停用，请在 .env 里删掉那一行"
+        return {"ok": True, "msg": msg}
+
     def _key_fail(self, kind: str, reason_zh: str) -> dict[str, Any]:
         return {
             "ok": False,
@@ -627,10 +654,15 @@ class Bridge:
         from dodoclaw.webui import keycheck
 
         c = self._svc.coach
+        gen = getattr(self, "_coach_gen", 0)
         res = keycheck.test_key(
             c.api_key or "", c.base_url, c.model, extra_body=chat_extra_body(self._svc.provider_id, c.model)
         )
         res = {**res, "model": c.model}
+        if gen != getattr(self, "_coach_gen", 0):
+            # the provider or key changed while this request was out (fast switching):
+            # the result belongs to the old choice, so it is not recorded
+            return {**res, "stale": True}
         self._last_test = {**res, "at": time.time()}
         if res.get("ok"):
             self._coach_err = {}

@@ -82,7 +82,7 @@
 #c-coach[data-ks=none] .ks-none,#c-coach[data-ks=switch] .ks-none,#c-coach[data-ks=typing] .ks-typing,#c-coach[data-ks=testing] .ks-testing,
 #c-coach[data-ks=ok] .ks-set,#c-coach[data-ks=error] .ks-set,#c-coach[data-ks=retest] .ks-set{display:flex}
 #c-coach[data-ks=none] .ks-pw,#c-coach[data-ks=switch] .ks-pw,#c-coach[data-ks=typing] .ks-pw,#c-coach[data-ks=testing] .ks-pw{display:flex}
-#c-coach.changing .ks-cancel{display:inline-flex}
+#c-coach.changing .ks-cancel,#c-coach.changing .ks-del{display:inline-flex}
 #prov-model{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 #key-res{min-width:0}
 .env-body{display:none;padding:8px 0 2px 22px}.env-body.open{display:block}
@@ -221,6 +221,7 @@ a.link{text-decoration:none}
      <div class="kset ks ks-set"><svg class="ico"><use href="#key"/></svg><span id="kset-pill"></span><span class="muted">只保存在这台电脑上，不会显示出来</span></div>
      <span class="btn primary sm ks ks-pw" id="btn-savekey">保存并测试</span>
      <span class="btn ghost sm ks ks-cancel" id="btn-cancel">取消</span>
+     <span class="btn txt-danger sm ks ks-del" id="btn-del" title="把这一家的 Key 从这台电脑上删掉">删除 Key</span>
      <span class="btn ghost sm ks ks-set" id="btn-test"><svg class="ico" style="width:14px;height:14px"><use href="#refresh"/></svg>重新测试</span>
      <span class="btn ghost sm ks ks-set" id="btn-change">更换 Key</span>
     </div></div>
@@ -303,6 +304,12 @@ a.link{text-decoration:none}
   </div>
  </section>
 </main>
+<!-- 删除 Key 确认（页内，不用系统弹窗） -->
+<div class="mask" id="dlg-del" hidden><div class="dlg" role="alertdialog" aria-modal="true" aria-labelledby="dlg-del-t" aria-describedby="dlg-del-d">
+ <div class="dt" id="dlg-del-t"><svg class="ico"><use href="#alert"/></svg><span></span></div>
+ <div class="dd2" id="dlg-del-d"></div>
+ <div class="acts"><span class="btn ghost sm" id="dlg-del-no" tabindex="0" role="button">取消</span><span class="btn danger-solid sm" id="dlg-del-yes" tabindex="0" role="button">删除</span></div>
+</div></div>
 <div id="toast"></div>
 </div>
 <script src="common.js"></script><script src="settings.js"></script>

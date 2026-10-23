@@ -156,7 +156,7 @@ class EnvFileKeyStore:
         return bool(self.get(env_var))
 
     def delete(self, env_var: str) -> None:
-        # not wired in the UI yet (README D10: 删除 Key 入口待定)
+        # 更换 Key → 删除 Key: only the active ``var=`` lines go; comments stay
         self._write(env_var, None)
         os.environ.pop(env_var, None)
 
@@ -173,6 +173,13 @@ def save_key(env_var: str, value: str) -> None:
     if env_var not in ALLOWED_VARS:
         raise KeyStoreError(MSG_BAD_VAR)
     _store.set(env_var, clean_key(value))
+
+
+def delete_key(env_var: str) -> None:
+    """Remove a stored key. Raises KeyStoreError (Chinese reason only)."""
+    if env_var not in ALLOWED_VARS:
+        raise KeyStoreError(MSG_BAD_VAR)
+    _store.delete(env_var)
 
 
 def has_key(env_var: str) -> bool:

@@ -98,9 +98,9 @@ html,body{height:100%;background:var(--bg-0);overflow:hidden;user-select:none}
 .field.dd:hover{border-color:rgba(255,255,255,.2)}
 .field.dd:focus-visible{outline:none;border-color:rgba(255,138,61,.6)}
 .field.dd.open{border-color:rgba(255,138,61,.6);box-shadow:0 0 0 3px rgba(229,72,47,.18)}
-.field.dd .caret{transition:transform var(--dur-1)}
+.field.dd .caret{transition:none}  /* open = points up, no in-between frame */
 .field.dd.open .caret{transform:rotate(180deg);color:var(--brand-2)}
-.ddmenu{position:absolute;z-index:8;width:470px;padding:6px;border-radius:12px;background:var(--glass-strong);border:1px solid var(--line-2);box-shadow:0 18px 50px rgba(0,0,0,.65);backdrop-filter:blur(18px) saturate(140%)}
+.ddmenu{position:absolute;z-index:8;width:470px;padding:6px;border-radius:12px;background:#121621;border:1px solid var(--line-2);box-shadow:0 18px 50px rgba(0,0,0,.65)}  /* opaque: rows below must not show through */
 .ddmenu[hidden]{display:none}
 .ddmenu .mi{display:flex;align-items:center;gap:10px;min-height:46px;padding:6px 10px;border-radius:9px;cursor:pointer}
 .ddmenu .mi:hover,.ddmenu .mi.hov{background:rgba(255,255,255,.06)}
@@ -112,15 +112,15 @@ html,body{height:100%;background:var(--bg-0);overflow:hidden;user-select:none}
 .ddmenu .ap{margin-left:auto;font-size:12px;flex:none}
 .ddmenu .ft{margin:4px 4px 2px;padding:8px 6px 2px;border-top:1px solid var(--line);font-size:11.5px;color:var(--text-3)}
 /* Key 输入框：type=password，只在保存前可以点眼睛看自己输入的内容 */
-.pw{display:flex;align-items:center;gap:8px;height:38px;padding:0 6px 0 12px;border-radius:9px;background:rgba(0,0,0,.28);border:1px solid var(--line-2);flex:1;min-width:0}
+.pw{display:flex;align-items:center;gap:8px;height:38px;padding:0 4px 0 12px;overflow:hidden;border-radius:9px;background:rgba(0,0,0,.28);border:1px solid var(--line-2);flex:1;min-width:0}
 .pw>.ico{width:15px;height:15px;color:var(--text-3);flex:none}
-.pw input{flex:1;min-width:0;height:100%;background:transparent;border:0;outline:0;color:var(--text);font:13px var(--font);letter-spacing:1px;user-select:text}
+.pw input{flex:1 1 0;min-width:0;width:0;height:100%;padding:0;white-space:nowrap;overflow:hidden;text-overflow:clip;background:transparent;border:0;outline:0;color:var(--text);font:13px var(--font);letter-spacing:1px;user-select:text}
 .pw input[type=password]{letter-spacing:2px}
 .pw input::placeholder{color:var(--text-3);letter-spacing:0}
-.pw .eye{width:30px;height:30px;border-radius:7px;display:flex;align-items:center;justify-content:center;color:var(--text-3);cursor:pointer;flex:none}
+.pw .eye{width:30px;height:30px;min-width:30px;border-radius:7px;display:flex;align-items:center;justify-content:center;color:var(--text-3);cursor:pointer;flex:none}
 .pw .eye:hover{background:rgba(255,255,255,.06);color:var(--text)}.pw .eye .ico{width:16px;height:16px}
 .pw:focus-within,.pw.focus{border-color:rgba(255,138,61,.6);box-shadow:0 0 0 3px rgba(229,72,47,.18)}
-.pw.dis{opacity:.6}.pw.dis .eye{display:none}
+.pw.dis input{opacity:.6}.pw.dis .eye{opacity:.45;cursor:not-allowed}  /* eye stays in place while testing; click explains */
 /* 已保存后的 Key 框：只有状态，没有任何 Key 字符 */
 .kset{display:flex;align-items:center;gap:10px;height:38px;padding:0 12px;border-radius:9px;background:rgba(0,0,0,.28);border:1px solid var(--line-2);flex:1;min-width:0;white-space:nowrap;overflow:hidden}
 .kset>.ico{width:15px;height:15px;color:var(--text-3)}
@@ -148,3 +148,14 @@ html,body{height:100%;background:var(--bg-0);overflow:hidden;user-select:none}
 .disc>.ico{width:14px;height:14px;color:var(--text-3);transform:rotate(-90deg);transition:transform var(--dur-1)}
 .disc.open>.ico{transform:none}
 .disc .hint{margin-left:6px}
+/* 删除 Key：更换 Key 编辑态里 取消 右边的红色文字按钮 + 页内确认框 */
+.btn.txt-danger{background:transparent;border-color:transparent;color:var(--danger);box-shadow:none}
+.btn.txt-danger:hover{background:rgba(255,93,108,.1)}
+.btn.danger-solid{background:var(--danger);border-color:var(--danger);color:#fff;box-shadow:0 6px 18px rgba(255,93,108,.25)}
+.mask{position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;background:rgba(5,7,12,.62)}
+.mask[hidden]{display:none}
+.dlg{width:430px;max-width:calc(100vw - 40px);padding:20px 22px 16px;border-radius:14px;background:#141924;border:1px solid var(--line-2);box-shadow:0 24px 70px rgba(0,0,0,.7)}
+.dlg .dt{display:flex;align-items:center;gap:10px;font-weight:800;font-size:15px}
+.dlg .dt .ico{width:18px;height:18px;color:var(--danger);flex:none}
+.dlg .dd2{font-size:12.5px;color:var(--text-2);line-height:1.7;margin-top:8px;padding-left:28px}
+.dlg .acts{display:flex;justify-content:flex-end;gap:10px;margin-top:18px}

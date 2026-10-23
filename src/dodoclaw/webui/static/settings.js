@@ -73,6 +73,9 @@ let busy = null;        // null | 'save' | 'retest'
 let changing = false;   // 更换 Key: input reopened over a configured key
 let saveErr = '';       // key rejected before saving (format / write error)
 let localTest = null;   // 20 s JS timeout result, until the next real test
+let testSeq = 0;        // request id: only the newest test / switch may update the card
+let switchTimer = null; // auto-test after a provider switch, debounced
+const SWITCH_TEST_DELAY_MS = 400;
 const TEST_WAIT_MS = 20000;
 const EXT = '<svg class="ico" style="width:12px;height:12px;vertical-align:-1px"><use href="#ext"/></svg>';
 const CK = '<svg class="ico ck"><use href="#check"/></svg>';
@@ -240,12 +243,19 @@ function withTimeout(p, ms) {
 }
 
 // 重新测试: one minimal request with the saved key; the result shows in the 测试结果 row.
+// A newer switch/test bumps testSeq; an older request's result is then ignored here
+// (and the backend does not record it either).
 async function runTest() {
-  if (busy) return;
+  if (busy === 'save') return;
+  clearTimeout(switchTimer);
+  const seq = ++testSeq;
   busy = 'retest'; localTest = null; renderCoachKs();
+  let timedOut = false;
   try { await withTimeout(api().test_key(), TEST_WAIT_MS); }
-  catch (e) { localTest = e && e.timeout ? { ...TIMEOUT } : null; }
-  finally { busy = null; await refresh(); }
+  catch (e) { timedOut = !!(e && e.timeout); }
+  if (seq !== testSeq) return;
+  busy = null; localTest = timedOut ? { ...TIMEOUT } : null;
+  await refresh();
 }
 
 // 保存并测试: save first, then test (a failed test keeps the key). The input is cleared
@@ -275,15 +285,55 @@ function setEye(show) {
 }
 function resetKeyInput() { $('#key-in').value = ''; setEye(false); saveErr = ''; }
 
-// 选中即生效：写 coach.provider + coach.model，热重载，没有确认框
+// 选中即生效：写服务商和默认模型，热重载，没有确认框。
+// 换到有 Key 的一家马上显示“测试中”，停手 0.4 秒后只测最后选中的那一家。
 async function pickProvider(id) {
-  if (busy) return;
+  if (busy === 'save') return toast('正在保存 Key，等一下再换', { icon: 'info' });
+  clearTimeout(switchTimer);
+  const seq = ++testSeq;  // any test still out belongs to the old provider: ignore it
+  busy = null;
   resetKeyInput(); changing = false; localTest = null;  // a key typed for the old provider is never saved under the new one
   const r = await api().set_provider(id);
+  if (seq !== testSeq) return;  // picked again meanwhile; the newer pick renders
   if (!r || !r.ok) toast((r && r.msg) || '没能切换，详情见日志', { icon: 'alert' });
   else { flashSaved(); if (r.msg) toast(r.msg, { icon: 'alert' }); }
+  const autoTest = !!(r && r.ok && r.key && r.key.configured);
+  if (autoTest) busy = 'retest';  // 测试中 right away, also during the debounce
   await refresh();
-  if (r && r.ok && r.key && r.key.configured) runTest();  // the old result no longer applies
+  if (seq !== testSeq || !autoTest) return;
+  switchTimer = setTimeout(() => { if (seq === testSeq) { busy = null; runTest(); } }, SWITCH_TEST_DELAY_MS);
+}
+
+// 删除 Key：只在“更换 Key”编辑态出现；页内确认，不用系统弹窗
+function delConfirmText(k) {
+  const shared = ((S.providers || []).find(p => p.id === k.provider) || {}).shares_key_with || [];
+  const names = shared.map(id => ((S.providers || []).find(p => p.id === id) || {}).name).filter(Boolean);
+  const both = names.length ? `${k.provider_name} 和 ${names.join('、')} 共用这一个 Key，${names.length > 1 ? '都' : '两个都'}会被删除。` : '';
+  return { t: `删除 ${k.provider_name} 的 Key？`, d: `${both}删除后教练将无法回答，提醒照常工作。` };
+}
+function openDelDialog() {
+  if (busy) return toast('正在测试，等一下再删', { icon: 'info' });
+  const k = S.key, m = delConfirmText(k), dlg = $('#dlg-del');
+  dlg.dataset.pid = k.provider;
+  $('#dlg-del-t span').textContent = m.t;
+  $('#dlg-del-d').textContent = m.d;
+  dlg.hidden = false;
+  setTimeout(() => $('#dlg-del-no').focus(), 0);
+}
+function closeDelDialog() { $('#dlg-del').hidden = true; }
+async function confirmDelete() {
+  const dlg = $('#dlg-del'), pid = dlg.dataset.pid;
+  if (dlg.hidden) return;
+  closeDelDialog();
+  clearTimeout(switchTimer); testSeq++; busy = null;
+  let r;
+  try { r = await api().delete_key(pid); } catch (e) { r = { ok: false, msg: '没能删除，详情见日志' }; }
+  if (!r || !r.ok) { toast((r && r.msg) || '没能删除，详情见日志', { icon: 'alert' }); await refresh(); return; }
+  changing = false; resetKeyInput(); localTest = null;
+  flashSaved();
+  if (r.msg) toast(r.msg, { icon: 'alert' });
+  await refresh();  // 未配置 → the input box is back
+  if (!S.key.configured) setTimeout(() => $('#key-in').focus(), 0);
 }
 
 function wireProvMenu() {
@@ -292,7 +342,7 @@ function wireProvMenu() {
   const hov = el => { items().forEach(e => e.classList.toggle('hov', e === el)); };
   const isOpen = () => !menu.hidden;
   const close = () => { menu.hidden = true; dd.classList.remove('open'); dd.setAttribute('aria-expanded', 'false'); };
-  const open = () => { if (busy) return toast('正在测试，等一下再换', { icon: 'info' }); menu.hidden = false; dd.classList.add('open'); dd.setAttribute('aria-expanded', 'true'); hov(menu.querySelector('.cur') || items()[0]); };
+  const open = () => { if (busy === 'save') return toast('正在保存 Key，等一下再换', { icon: 'info' }); menu.hidden = false; dd.classList.add('open'); dd.setAttribute('aria-expanded', 'true'); hov(menu.querySelector('.cur') || items()[0]); };
   dd.onclick = () => (isOpen() ? close() : open());
   dd.onkeydown = e => {
     const list = items(), i = list.findIndex(x => x.classList.contains('hov'));
@@ -321,7 +371,7 @@ function wireCoach() {
     if (e.key === 'Enter') saveKey();
     else if (e.key === 'Escape' && changing) { resetKeyInput(); changing = false; renderCoachKs(); }
   };
-  $('#btn-eye').onclick = e => { e.preventDefault(); if (inp.disabled) return; setEye(inp.type === 'password'); inp.focus(); };
+  $('#btn-eye').onclick = e => { e.preventDefault(); if (inp.disabled) return toast('正在测试，测完再看', { icon: 'info' }); setEye(inp.type === 'password'); inp.focus(); };
   $('#btn-savekey').onclick = saveKey;
   $('#btn-test').onclick = runTest;
   $('#btn-change').onclick = () => {
@@ -329,6 +379,15 @@ function wireCoach() {
     changing = true; resetKeyInput(); renderCoachKs(); setTimeout(() => inp.focus(), 0);
   };
   $('#btn-cancel').onclick = () => { changing = false; resetKeyInput(); renderCoachKs(); };
+  $('#btn-del').onclick = openDelDialog;
+  $('#dlg-del-no').onclick = closeDelDialog;
+  $('#dlg-del-yes').onclick = confirmDelete;
+  $('#dlg-del').onmousedown = e => { if (e.target === e.currentTarget) closeDelDialog(); };
+  $('#dlg-del').onkeydown = e => {
+    if (e.key === 'Escape') { e.preventDefault(); closeDelDialog(); $('#btn-del').focus(); }
+    else if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); document.activeElement === $('#dlg-del-yes') ? confirmDelete() : closeDelDialog(); }
+    else if (e.key === 'Tab') { e.preventDefault(); (document.activeElement === $('#dlg-del-no') ? $('#dlg-del-yes') : $('#dlg-del-no')).focus(); }
+  };
   $('#btn-apply').onclick = async () => { if (!(await api().open_key_page(S.key.provider, 'key'))) toast('没能打开浏览器，详情见日志', { icon: 'alert' }); };
   $('#key-res').onclick = async e => {
     const back = e.target.closest('[data-back]');
