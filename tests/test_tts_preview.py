@@ -167,3 +167,21 @@ def test_play_audio_file_never_raises(no_pygame, monkeypatch, tmp_path):
     f.write_bytes(b"x")
     monkeypatch.setattr(audio_io, "_is_windows", lambda: False)
     audio_io.play_audio_file(f)  # logs a warning, no exception
+
+
+def test_stuck_synth_times_out_as_network_error(monkeypatch):
+    import asyncio
+    from types import SimpleNamespace
+
+    from dodoclaw.webui import tts_preview
+
+    class Stuck:
+        def __init__(self, text, voice):
+            pass
+
+        async def save(self, path):
+            await asyncio.sleep(30)
+
+    monkeypatch.setattr(tts_preview, "SYNTH_TIMEOUT", 0.05)
+    r = tts_preview.preview("zh-CN-XiaoxiaoNeural", edge_module=SimpleNamespace(Communicate=Stuck), player=lambda p: None)
+    assert r == {"ok": False, "msg": tts_preview.MSG_NETWORK}

@@ -38,6 +38,7 @@ MSG_BUSY = "正在试听，等这句放完"
 MSG_UNKNOWN = "试听失败，详情见日志"
 
 _lock = threading.Lock()
+SYNTH_TIMEOUT = 20.0  # s; a stuck connection must not keep 试听 busy forever
 
 
 def tts_available() -> bool:
@@ -101,7 +102,7 @@ def preview(
             out = Path(tmp.name)
         try:
             try:
-                asyncio.run(edge_module.Communicate(text, voice).save(str(out)))
+                asyncio.run(asyncio.wait_for(edge_module.Communicate(text, voice).save(str(out)), SYNTH_TIMEOUT))
                 if not out.exists() or out.stat().st_size < 32:
                     raise ConnectionError("empty audio")
             except Exception as exc:
