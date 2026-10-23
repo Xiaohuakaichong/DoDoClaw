@@ -115,6 +115,23 @@ class Settings(BaseSettings):
                 ", ".join(names),
             )
 
+    def vendor_key(self, provider_id: str) -> str:
+        return {
+            "stepfun_plan": self.stepfun_api_key,
+            "stepfun": self.stepfun_api_key,
+            "deepseek": self.deepseek_api_key,
+            "dashscope": self.dashscope_api_key,
+            "zhipu": self.zhipu_api_key,
+            "moonshot": self.moonshot_api_key,
+            "siliconflow": self.siliconflow_api_key,
+            "volcengine": self.ark_api_key,
+            "minimax": self.minimax_api_key,
+            "yi": self.yi_api_key,
+            "baichuan": self.baichuan_api_key,
+            "openai": self.openai_api_key,
+            "xai": self.xai_api_key,
+        }.get(provider_id, "")
+
     def resolve_llm(self) -> tuple[str, str, str, str, str]:
         """
         Returns (provider_id, provider_name, api_key, base_url, model).
@@ -135,42 +152,18 @@ class Settings(BaseSettings):
         ):
             provider_id = "xai"
 
-        api_key_hint = self.llm_api_key
-        if get_provider(provider_id).id == "xai":
-            api_key_hint = api_key_hint or self.xai_api_key
-
         base_hint = str(yaml_coach.get("base_url") or "")
         model_hint = str(yaml_coach.get("model") or "")
-
+        spec = get_provider(provider_id)
+        # Provider's own key (Settings fields include the .env file), then the
+        # generic LLM_API_KEY. Never another vendor's key (PRD D10 picker).
+        vendor_key = (self.vendor_key(spec.id) or "").strip()
         spec, key, url, model = resolve_llm_runtime(
             provider_id,
-            api_key=api_key_hint,
+            api_key=vendor_key or self.llm_api_key,
             base_url=base_hint,
             model=model_hint,
         )
-
-        # Vendor-specific keys from Settings fields
-        if not key:
-            vendor_map = {
-                "stepfun_plan": self.stepfun_api_key,
-                "stepfun": self.stepfun_api_key,
-                "deepseek": self.deepseek_api_key,
-                "dashscope": self.dashscope_api_key,
-                "zhipu": self.zhipu_api_key,
-                "moonshot": self.moonshot_api_key,
-                "siliconflow": self.siliconflow_api_key,
-                "volcengine": self.ark_api_key,
-                "minimax": self.minimax_api_key,
-                "yi": self.yi_api_key,
-                "baichuan": self.baichuan_api_key,
-                "openai": self.openai_api_key,
-                "xai": self.xai_api_key,
-            }
-            key = (vendor_map.get(spec.id) or "").strip() or key
-
-        if not key and self.xai_api_key and spec.id == "xai":
-            key = self.xai_api_key
-
         return spec.id, spec.name, key, url, model
 
 

@@ -373,7 +373,7 @@ class DoDoClawService:
 
             _, key2, url2, mdl2 = resolve_llm_runtime(
                 pid,
-                api_key=api_key or self.settings.llm_api_key,
+                api_key=api_key or self.settings.vendor_key(pid) or self.settings.llm_api_key,
                 base_url=base_url or "",
                 model=model or "",
             )

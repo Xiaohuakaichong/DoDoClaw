@@ -54,9 +54,17 @@ def test_resolve_runtime_env():
         "stepfun_plan", env_get=env
     )
     assert spec.id == "stepfun_plan"
-    assert key == "sk-test"
+    assert key == "sk-step"  # the provider's own key beats the generic LLM_API_KEY
     assert url.endswith("/step_plan/v1")
     assert model
+    assert resolve_llm_runtime("stepfun_plan", env_get={"LLM_API_KEY": "sk-test"})[1] == "sk-test"
+
+
+def test_no_cross_vendor_key_fallback():
+    """After switching to DeepSeek, a StepFun key must not be sent to DeepSeek."""
+    env = {"STEPFUN_API_KEY": "sk-step", "XAI_API_KEY": "xai-1"}
+    assert resolve_llm_runtime("deepseek", env_get=env)[1] == ""
+    assert resolve_llm_runtime("xai", env_get=env)[1] == "xai-1"
 
 
 def test_provider_id_from_name():

@@ -17,8 +17,23 @@ class ProviderSpec:
     region: str = "cn"  # cn | global | custom
     note: str = ""
     docs_url: str = ""
+    # Page where the user creates an API key (设置页“去申请”); "" = fall back to docs_url
+    key_url: str = ""
+    # Page to top up / renew (测试失败“去充值 / 去续订”); "" = fall back to key_url
+    billing_url: str = ""
     # Send {"thinking": {"type": "disabled"}} on chat completions (DeepSeek V4 models think by default)
     thinking_off: bool = False
+
+    def apply_url(self) -> str:
+        """Where “去申请” goes: the key page, else the docs. https only."""
+        for u in (self.key_url, self.docs_url):
+            if u.startswith("https://"):
+                return u
+        return ""
+
+    def topup_url(self) -> str:
+        """Where “去充值 / 去续订” goes. https only."""
+        return self.billing_url if self.billing_url.startswith("https://") else self.apply_url()
 
     def model_choices(self) -> list[str]:
         items = list(self.models) if self.models else [self.default_model]
@@ -43,6 +58,8 @@ PROVIDERS: dict[str, ProviderSpec] = {
         region="cn",
         note="订阅 Coding Plan / Step Plan 额度专用端点（国内）",
         docs_url="https://platform.stepfun.com/docs/zh/step-plan/quick-start",
+        key_url="https://platform.stepfun.com/interface-key",
+        billing_url="https://platform.stepfun.com/step-plan",
     ),
     "stepfun": ProviderSpec(
         id="stepfun",
@@ -54,6 +71,7 @@ PROVIDERS: dict[str, ProviderSpec] = {
         region="cn",
         note="按量计费开放平台，非 Step Plan 订阅端点",
         docs_url="https://platform.stepfun.com/docs/zh/guides/developer/openai",
+        key_url="https://platform.stepfun.com/interface-key",
     ),
     "deepseek": ProviderSpec(
         id="deepseek",
@@ -66,6 +84,8 @@ PROVIDERS: dict[str, ProviderSpec] = {
         note="默认 deepseek-flash，关闭思考模式（回答更快更省）",
         thinking_off=True,
         docs_url="https://platform.deepseek.com/api-docs/",
+        key_url="https://platform.deepseek.com/api_keys",
+        billing_url="https://platform.deepseek.com/top_up",
     ),
     "dashscope": ProviderSpec(
         id="dashscope",
@@ -168,6 +188,7 @@ PROVIDERS: dict[str, ProviderSpec] = {
         key_env="XAI_API_KEY",
         region="global",
         docs_url="https://docs.x.ai",
+        key_url="https://console.x.ai",
     ),
     "openai": ProviderSpec(
         id="openai",
@@ -178,6 +199,7 @@ PROVIDERS: dict[str, ProviderSpec] = {
         key_env="OPENAI_API_KEY",
         region="global",
         docs_url="https://platform.openai.com/docs",
+        key_url="https://platform.openai.com/api-keys",
     ),
     "custom": ProviderSpec(
         id="custom",
@@ -258,29 +280,21 @@ def resolve_llm_runtime(
     Resolve (provider, api_key, base_url, model) from explicit values + env map.
     env_get: optional dict (defaults to os.environ); only key variables are read
     from it — base URL / model come from the arguments or the provider defaults.
+    Key order: explicit api_key → the provider's own variable (key_env) →
+    LLM_API_KEY (generic, legacy).
     """
     import os
 
     env = env_get if env_get is not None else os.environ
     spec = get_provider(provider_id)
 
+    # Provider's own key first, then the generic LLM_API_KEY. No cross-vendor
+    # fallback: a StepFun key must never be sent to DeepSeek after a switch.
     key = (api_key or "").strip()
     if not key:
-        key = (env.get("LLM_API_KEY") or "").strip()
-    if not key:
         key = (env.get(spec.key_env) or "").strip()
-    # Legacy / cross-provider fallbacks
     if not key:
-        for fallback in (
-            "STEPFUN_API_KEY",
-            "XAI_API_KEY",
-            "DEEPSEEK_API_KEY",
-            "DASHSCOPE_API_KEY",
-            "OPENAI_API_KEY",
-        ):
-            key = (env.get(fallback) or "").strip()
-            if key:
-                break
+        key = (env.get("LLM_API_KEY") or "").strip()
 
     url = (base_url or "").strip() or spec.base_url
     mdl = (model or "").strip() or spec.default_model

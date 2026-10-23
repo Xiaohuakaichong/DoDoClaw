@@ -229,7 +229,7 @@ def test_bridge_test_key_uses_mocked_client(envfile, monkeypatch, caplog):
     b.reload_env()
     r = b.test_key()
     assert seen["api_key"] == SECRET and seen["max_retries"] == 0  # went to the (fake) client only
-    assert r == {"ok": False, "kind": "auth", "reason_zh": "Key 无效或已过期", "ms": None}
+    assert r == {"ok": False, "kind": "auth", "reason_zh": "Key 无效或已过期", "ms": None, "model": "deepseek-chat"}
     assert b._coach_err["reason_zh"] == "Key 无效或已过期"  # the home card shows it too
     assert SECRET not in json.dumps(b._last_test) and SECRET not in caplog.text
     assert envfile.read_bytes() == before

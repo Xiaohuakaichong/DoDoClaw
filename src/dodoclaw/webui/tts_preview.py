@@ -29,6 +29,8 @@ VOICE_ZH = {
 }
 
 MSG_NO_EDGE = "没装语音合成组件，试听不了"
+MSG_NO_EDGE_SHORT = "缺少声音组件"
+MSG_NO_EDGE_DETAIL = "没打包 Edge TTS"
 MSG_NETWORK = "联网失败，稍后再试"
 MSG_NO_PLAYER = "没装播放组件，试听不了"
 MSG_PLAY_FAIL = "没能播放声音，检查一下音频输出设备"
@@ -36,6 +38,17 @@ MSG_BUSY = "正在试听，等这句放完"
 MSG_UNKNOWN = "试听失败，详情见日志"
 
 _lock = threading.Lock()
+
+
+def tts_available() -> bool:
+    """False when this build did not ship ``edge_tts`` (README D10 #coach,tts-missing).
+    Same check as before: ``importlib.util.find_spec``; cheap, nothing is imported."""
+    import importlib.util
+
+    try:
+        return importlib.util.find_spec("edge_tts") is not None
+    except (ImportError, ValueError):
+        return False
 
 
 def edge_voice(configured: str | None) -> str:
@@ -80,7 +93,7 @@ def preview(
         if edge_module is None:
             try:
                 edge_module = importlib.import_module("edge_tts")
-            except ImportError:
+            except Exception:  # missing package or a broken dependency
                 return {"ok": False, "msg": MSG_NO_EDGE}
         player = player or _default_player
 

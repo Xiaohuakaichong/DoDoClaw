@@ -163,10 +163,11 @@ class Bridge:
         self._coach_err: dict[str, Any] = {}  # {kind, reason_zh} of the last failed coach call
         self._last_ask_ms: int | None = None
         # settings page
-        from dodoclaw.paths import app_dir
-        from dodoclaw.webui import keycheck, settings_store
+        from dodoclaw.webui import keycheck, keystore, settings_store
 
-        self._env_path = app_dir() / ".env"
+        self._tts_ok: bool | None = None
+        self._switched_from = ""  # provider we just switched away from (for “切回 …”)
+        self._env_path = keystore.env_path()  # next to the exe, or the repo root from source
         self._env_names = keycheck.env_names_in_file(self._env_path)
         self._ui_path = self._svc.settings.yaml_path()
         self.ui = settings_store.load(self._ui_path)
@@ -227,12 +228,13 @@ class Bridge:
             "items": [x for x in items if x and x != "empty"],
             "items_zh": [item_zh(x) for x in items if x and x != "empty"],
             "timers": self._timers.compute(snap.clock_time) if snap.in_game else [],
-            "coach": {"provider": svc.provider_name, "model": svc.coach.model, "key_ok": key_ok, "error": coach_error},
+            "coach": {"provider": self._provider_label(), "model": svc.coach.model, "key_ok": key_ok, "error": coach_error},
             "voice": {
                 "tts": svc.tts_backend,
                 "stt": svc.stt_backend,
                 "tts_zh": TTS_ZH.get(svc.tts_backend, "已配置"),
                 "stt_zh": STT_ZH.get(svc.stt_backend, "已配置"),
+                "tts_available": self._tts_available(),
             },
             "speaking": self._speaker.speaking,
             "busy": self._busy,
@@ -328,7 +330,19 @@ class Bridge:
         from dodoclaw.webui.keycheck import key_status
 
         c = self._svc.coach
-        return key_status(self._svc.provider_id, self._svc.provider_name, c.api_key or "")
+        return key_status(self._svc.provider_id, self._svc.provider_name, c.api_key or "", c.model or "")
+
+    def _provider_label(self) -> str:
+        from dodoclaw.webui import keycheck
+
+        return keycheck.provider_label(self._svc.provider_id)
+
+    def _tts_available(self) -> bool:
+        from dodoclaw.webui import tts_preview
+
+        if getattr(self, "_tts_ok", None) is None:  # find_spec once per run; the package cannot appear later
+            self._tts_ok = tts_preview.tts_available()
+        return bool(self._tts_ok)
 
     def _stt_default(self, key: dict[str, Any]) -> str:
         return "cloud" if key["has_stt"] else "local"
@@ -349,7 +363,7 @@ class Bridge:
             backend = "whisper"
         else:
             if not key["stepfun_key"]:
-                return "云端识别要阶跃的 Key：在 .env 里加 STEPFUN_API_KEY=你的Key，再点“重新读取”"
+                return "云端识别要阶跃的 Key：先把服务商切到阶跃并保存 Key，或在 .env 里加阶跃的 Key"
             backend = key["provider"] if key["has_stt"] else "stepfun_plan"
         try:
             self._svc.reload_voice(stt_backend=backend)
@@ -359,6 +373,27 @@ class Bridge:
         if self._svc.stt_backend == "mock":
             return "语音识别没能启动，详情见日志"
         return ""
+
+    def _voice_state(self, key: dict[str, Any]) -> dict[str, Any]:
+        import importlib.util
+
+        from dodoclaw.webui import tts_preview
+
+        svc = self._svc
+        return {
+            "ask_on": bool(self.ui["voice_ask"]) and svc.stt_backend != "mock",
+            "stt_mode": self.ui.get("stt_mode") or self._stt_default(key),
+            "stt_default": self._stt_default(key),
+            "stt_zh": STT_ZH.get(svc.stt_backend, "已配置"),
+            "whisper_ready": importlib.util.find_spec("faster_whisper") is not None,
+            "tts_on": svc.tts_backend != "mock",
+            "tts_zh": TTS_ZH.get(svc.tts_backend, "已配置"),
+            "preview_voice_zh": _preview_voice_zh(getattr(svc, "tts_voice", "")),
+            # README D10 #coach,tts-missing: 声音 row says so up front; 试听 and the switch are disabled
+            "tts_available": self._tts_available(),
+            "tts_missing_zh": tts_preview.MSG_NO_EDGE_SHORT,
+            "tts_missing_detail_zh": tts_preview.MSG_NO_EDGE_DETAIL,
+        }
 
     def settings_state(self) -> dict[str, Any]:
         from dodoclaw.webui import settings_store
@@ -375,26 +410,15 @@ class Bridge:
         except Exception:
             target = None
         cfg = (target / "gamestate_integration_dodoclaw.cfg") if target else None
-        import importlib.util
-
         return {
             "ui": self.ui,
             "budget": settings_store.budget(self.ui["reminders"]),
             "budget_cap": settings_store.BUDGET_CAP,
             "over_cap_hint": settings_store.OVER_CAP_HINT,
             "pending": sorted(settings_store.PENDING),
-            "key": key,
-            "last_test": self._last_test,
-            "voice": {
-                "ask_on": bool(self.ui["voice_ask"]) and svc.stt_backend != "mock",
-                "stt_mode": self.ui.get("stt_mode") or self._stt_default(key),
-                "stt_default": self._stt_default(key),
-                "stt_zh": STT_ZH.get(svc.stt_backend, "已配置"),
-                "whisper_ready": importlib.util.find_spec("faster_whisper") is not None,
-                "tts_on": svc.tts_backend != "mock",
-                "tts_zh": TTS_ZH.get(svc.tts_backend, "已配置"),
-                "preview_voice_zh": _preview_voice_zh(getattr(svc, "tts_voice", "")),
-            },
+            "key": {**key, "last_test": self._last_test_view(), "switched_from": self._switched_view(key)},
+            "providers": self.list_providers(),
+            "voice": self._voice_state(key),
             "adv": {
                 "online": age is not None and age < 35,
                 "updates": svc.gsi_update_count,
@@ -456,7 +480,7 @@ class Bridge:
         return _open_path(app_dir() / "logs")
 
     def reload_env(self) -> dict[str, Any]:
-        """Re-read .env (never written) and return only which keys are set."""
+        """Re-read .env into the process and return only which keys are set."""
         from dodoclaw.webui import keycheck
 
         self._env_names = keycheck.reload_env_file(self._env_path, self._env_names)
@@ -468,6 +492,136 @@ class Bridge:
         self._coach_err = {}  # the key may have changed; the auto-test will report again
         return {"key": self._key_status(), "keys": keycheck.env_flags()}
 
+    def _reload_coach(self) -> None:
+        try:
+            self._svc.reload_llm()
+        except Exception:
+            logger.exception("reload llm failed")
+        self._last_test = {}
+        self._coach_err = {}
+
+    def _follow_provider_stt(self) -> str:
+        """Speech recognition left on 跟随服务商 (stt_mode unset) follows a provider/key
+        change; a mode the user picked by hand is never changed."""
+        if self.ui.get("voice_ask") and not self.ui.get("stt_mode"):
+            return self._apply_stt(True)
+        return ""
+
+    def list_providers(self) -> list[dict[str, Any]]:
+        """服务商 dropdown: the five presets with booleans only (README D10 js_api)."""
+        from dodoclaw.webui import keycheck
+
+        configured = bool((self._svc.coach.api_key or "").strip())
+        return keycheck.list_providers(self._svc.provider_id, configured)
+
+    def _last_test_view(self) -> dict[str, Any]:
+        """Last 测试 result + the fixed Chinese next step for a failure."""
+        from dodoclaw.webui import keycheck
+
+        t = self._last_test
+        if not t:
+            return {}
+        out = {k: t.get(k) for k in ("ok", "kind", "reason_zh", "ms", "model", "at")}
+        if not t.get("ok"):
+            out.update(keycheck.test_guide(str(t.get("kind") or "")))
+        return out
+
+    def _switched_view(self, key: dict[str, Any]) -> dict[str, Any] | None:
+        """After switching to a provider without a key: the previous one, if it has one."""
+        from dodoclaw.webui import keycheck, keystore
+
+        pid = getattr(self, "_switched_from", "")
+        if not pid or key["configured"] or pid == key["provider"]:
+            return None
+        from dodoclaw.providers import get_provider
+
+        if not keystore.has_key(get_provider(pid).key_env):
+            return None
+        return {"id": pid, "name": keycheck.provider_label(pid)}
+
+    def set_provider(self, provider_id: str) -> dict[str, Any]:
+        """Select a provider: write coach.provider + coach.model (that provider's
+        default model; base_url back to its default) and hot-reload the coach.
+        Returns {ok, msg, provider, model, key: {configured}}."""
+        from dodoclaw import config
+        from dodoclaw.providers import get_provider
+        from dodoclaw.webui import keycheck
+
+        def out(ok: bool, msg: str = "") -> dict[str, Any]:
+            return {
+                "ok": ok,
+                "msg": msg,
+                "provider": self._svc.provider_id,
+                "model": self._svc.coach.model,
+                "key": {"configured": bool((self._svc.coach.api_key or "").strip())},
+            }
+
+        pid = str(provider_id or "")
+        if pid not in keycheck.PICKER_IDS:
+            return out(False, "没有这个服务商")
+        prev = self._svc.provider_id
+        if pid == prev:
+            return out(True)
+        try:
+            config.save_coach_choice(pid, get_provider(pid).default_model, "")
+        except Exception:
+            logger.exception("save coach provider failed")
+            return out(False, "没能保存服务商选择，详情见日志")
+        self._switched_from = prev
+        self._reload_coach()
+        msg = self._follow_provider_stt()
+        self._save_ui()
+        return out(True, msg)
+
+    def save_key(self, provider_id: str, key: str) -> dict[str, Any]:
+        """The only bridge method that receives a key (README D10).
+
+        strip → KeyStore.set → reload → test_key. Save first, then test: a failed
+        test keeps the key. Returns {ok, kind, reason_zh, ms, model, configured} —
+        never the key; nothing here logs it or puts it in an error."""
+        from dodoclaw.providers import get_provider
+        from dodoclaw.webui import keystore
+
+        pid = str(provider_id or "")
+        if pid != self._svc.provider_id:
+            # the dropdown changed while the key was being typed: never file it under another provider
+            return self._key_fail("invalid", "服务商刚刚变了，请重新粘贴")
+        spec = get_provider(pid)
+        try:
+            keystore.save_key(spec.key_env, key if isinstance(key, str) else "")
+        except keystore.KeyStoreError as exc:
+            return self._key_fail("store" if exc.reason_zh == keystore.MSG_WRITE else "invalid", exc.reason_zh)
+        finally:
+            key = ""  # drop our reference early
+        logger.info("saved key for %s", spec.id)
+        self.reload_env()
+        self._switched_from = ""
+        res = self.test_key()
+        stt_msg = self._follow_provider_stt()
+        self._save_ui()
+        return {
+            "ok": bool(res.get("ok")),
+            "kind": res.get("kind", ""),
+            "reason_zh": res.get("reason_zh", ""),
+            "ms": res.get("ms"),
+            "model": res.get("model", ""),
+            "configured": bool((self._svc.coach.api_key or "").strip()),
+            "saved": True,
+            "msg": stt_msg,
+        }
+
+    def _key_fail(self, kind: str, reason_zh: str) -> dict[str, Any]:
+        return {
+            "ok": False,
+            "kind": kind,
+            "reason_zh": reason_zh,
+            "ms": None,
+            "model": self._svc.coach.model,
+            "configured": bool((self._svc.coach.api_key or "").strip()),
+            "saved": False,
+            "msg": "",
+        }
+
     def test_key(self) -> dict[str, Any]:
         from dodoclaw.providers import chat_extra_body
         from dodoclaw.webui import keycheck
@@ -476,6 +630,7 @@ class Bridge:
         res = keycheck.test_key(
             c.api_key or "", c.base_url, c.model, extra_body=chat_extra_body(self._svc.provider_id, c.model)
         )
+        res = {**res, "model": c.model}
         self._last_test = {**res, "at": time.time()}
         if res.get("ok"):
             self._coach_err = {}
@@ -483,10 +638,13 @@ class Bridge:
             self._coach_err = {"kind": res["kind"], "reason_zh": res["reason_zh"], "at": time.time()}
         return res
 
-    def open_key_page(self) -> bool:
-        from dodoclaw.providers import get_provider
+    def open_key_page(self, provider_id: str = "", purpose: str = "key") -> bool:
+        """去申请 (key page) / 去充值 · 去续订 (purpose="topup"). https only."""
+        from dodoclaw.providers import PROVIDERS, get_provider
 
-        url = get_provider(self._svc.provider_id).docs_url
+        pid = provider_id if provider_id in PROVIDERS else self._svc.provider_id
+        spec = get_provider(pid)
+        url = spec.topup_url() if purpose == "topup" else spec.apply_url()
         if not url.startswith("https://"):
             return False
         import webbrowser
@@ -494,10 +652,8 @@ class Bridge:
         return bool(webbrowser.open(url))
 
     def set_tts(self, on: bool) -> dict[str, Any]:
-        import importlib.util
-
-        if on and importlib.util.find_spec("edge_tts") is None:
-            return {"ok": False, "msg": "这个版本还没带 Edge 声音组件"}
+        if on and not self._tts_available():
+            return {"ok": False, "msg": "缺少声音组件，换最新安装包即可恢复"}
         try:
             self._svc.reload_voice(tts_backend="edge" if on else "mock")
         except Exception:
