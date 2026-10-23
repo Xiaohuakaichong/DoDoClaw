@@ -9,7 +9,11 @@ function render(s) {
   const g = s.gsi;
   chip($('#chip-gsi'), g.online ? 'ok' : 'warn', g.online ? 'Dota 已连接' : '等待 Dota');
   chip($('#chip-coach'), s.coach.key_ok ? 'ok' : 'err', s.coach.key_ok ? `教练 · ${s.coach.provider}` : '教练未设置 Key');
-  $('#chip-voice span').textContent = `播报 · ${s.voice.tts}`;
+  const ttsOff = s.voice.tts === 'mock', sttOff = s.voice.stt === 'mock';
+  $('#chip-voice span').textContent = ttsOff ? '播报 · 未配置' : `播报 · ${s.voice.tts}`;
+  $('#chip-voice').classList.toggle('off', ttsOff);
+  $('#mic').classList.toggle('off', sttOff); $('#mic').title = sttOff ? '未配置语音识别' : '按住说话';
+  $('#mic-use').setAttribute('href', sttOff ? '#mic-off' : '#mic');
   $('#gsi-addr').textContent = g.addr;
   $('#st-gsi-d').textContent = g.age == null ? `还没收到数据 · 监听 ${g.addr}` : `上次推送 ${g.age} 秒前`;
   $('#st-gsi-r').textContent = g.online ? '正常' : '等待'; $('#st-gsi-r').style.color = g.online ? 'var(--ok)' : 'var(--warn)';
@@ -67,13 +71,13 @@ onReady(() => {
   const send = () => { const v = $('#q').value.trim(); if (!v) return; api().ask(v, false); $('#q').value = ''; };
   $('#send').onclick = send;
   $('#q').addEventListener('keydown', e => { if (e.key === 'Enter') send(); });
-  $('#mic').onclick = async () => { if (!(await api().listen())) toast(lastS && lastS.voice && lastS.voice.stt === 'mock' ? '语音识别还没配置，先打字提问' : '正在处理上一个问题，稍等'); };
+  $('#mic').onclick = async () => { if (!(await api().listen())) toast(lastS && lastS.voice && lastS.voice.stt === 'mock' ? '还没配语音识别，先打字提问吧' : '正在处理上一个问题，稍等'); };
   $('#btn-min').onclick = () => api().minimize();
   $('#btn-close').onclick = () => api().close();
   $('#btn-ov').onclick = () => api().toggle_overlay();
   $('#rm').onclick = () => api().set_reduce_motion(!$('#rm').classList.contains('on'));
-  document.querySelectorAll('.rail a.soon').forEach(a => a.onclick = () => toast(`「${a.textContent.trim()}」页还在做，原型里先只有首页`));
+  document.querySelectorAll('.rail a.soon').forEach(a => a.onclick = () => toast('这个页面还在做，先用首页'));
   poll(s => { lastS = s; render(s); }, 1000);
 });
 let toastT = 0;
-function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('on'), 2200); }
+function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('on'), 2500); }

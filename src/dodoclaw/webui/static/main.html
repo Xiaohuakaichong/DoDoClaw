@@ -80,8 +80,8 @@ html,body{height:100%;background:var(--bg-0);overflow:hidden;user-select:none}
 .sample{position:absolute;left:150px;top:14px;font-size:10px;color:var(--text-3);opacity:.7}
 
 .wc span{cursor:pointer}.wc span:hover{color:var(--text);background:rgba(255,255,255,.06)}.wc span.x:hover{background:#c42b1c;color:#fff}
-.rail a{cursor:pointer}.rail a.soon{opacity:.45;cursor:pointer}
-#toast{position:fixed;left:50%;bottom:96px;transform:translate(-50%,8px);opacity:0;pointer-events:none;padding:10px 16px;border-radius:12px;background:var(--glass-strong,rgba(20,24,32,.95));border:1px solid var(--line-2,rgba(255,255,255,.12));box-shadow:0 12px 30px rgba(0,0,0,.5);font-size:13px;transition:opacity 160ms,transform 160ms;z-index:9}#toast.on{opacity:1;transform:translate(-50%,0)}
+.rail a{cursor:pointer}.rail a.soon{opacity:.45;cursor:pointer}.rail a.soon::after{content:"即将上线";font-size:9px;line-height:1;margin-top:1px;color:var(--text-3)}.mic.off{color:var(--text-3)}.chip.off .ico{color:var(--text-3)}
+#toast{position:fixed;left:50%;bottom:96px;backdrop-filter:blur(18px) saturate(140%);transform:translate(-50%,8px);opacity:0;pointer-events:none;padding:10px 16px;border-radius:12px;background:var(--glass-strong);border:1px solid var(--line-2,rgba(255,255,255,.12));box-shadow:0 12px 30px rgba(0,0,0,.5);font-size:13px;transition:opacity 160ms,transform 160ms;z-index:9}#toast.on{opacity:1;transform:translate(-50%,0)}
 .ask input{flex:1;background:transparent;border:0;outline:0;color:var(--text);font:14px var(--font)}
 .ask input::placeholder{color:var(--text-3)}
 .mic,.btn{cursor:pointer}.mic.live{background:var(--brand-grad);box-shadow:var(--brand-glow);color:#fff}
@@ -108,7 +108,7 @@ html,body{height:100%;background:var(--bg-0);overflow:hidden;user-select:none}
 <symbol id="chat" viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/></symbol>
 <symbol id="hist" viewBox="0 0 24 24"><path d="M4 19V9M10 19V5M16 19v-7M22 19H2"/></symbol>
 <symbol id="set" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></symbol>
-<symbol id="mic" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></symbol>
+<symbol id="mic-off" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3M4 4l16 16"/></symbol><symbol id="mic" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></symbol>
 <symbol id="vol" viewBox="0 0 24 24"><path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11"/></symbol>
 <symbol id="send" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
 <symbol id="expand" viewBox="0 0 24 24"><path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7"/></symbol>
@@ -160,7 +160,7 @@ html,body{height:100%;background:var(--bg-0);overflow:hidden;user-select:none}
    <div class="answer" id="answer"><span style="color:var(--text-3)">问点什么吧。对局里问，会结合实时局势回答。</span></div>
    <div class="tl"><div class="tlh"><span class="label">实时计时</span></div><div class="live-timers" id="timers"><span style="color:var(--text-3);font-size:12px">进入对局后显示神龛、魔方、肉山、盾的倒计时</span></div></div>
   </section>
-  <div class="ask"><svg class="ico" style="color:var(--brand-2)"><use href="#spark"/></svg><input id="q" placeholder="问教练，比如“对面斧王，我幻刺先出什么？”" autocomplete="off"><span class="k">ENTER</span><span class="mic" id="mic"><svg class="ico"><use href="#mic"/></svg></span><span class="btn primary" id="send">提问<svg class="ico" style="width:16px;height:16px"><use href="#send"/></svg></span></div>
+  <div class="ask"><svg class="ico" style="color:var(--brand-2)"><use href="#spark"/></svg><input id="q" placeholder="问教练，比如“对面斧王，我幻刺先出什么？”" autocomplete="off"><span class="k">ENTER</span><span class="mic" id="mic"><svg class="ico"><use id="mic-use" href="#mic"/></svg></span><span class="btn primary" id="send">提问<svg class="ico" style="width:16px;height:16px"><use href="#send"/></svg></span></div>
  </main>
  <span class="proto">原型 · 英雄与物品图标 © Valve，运行时下载 · 非 Valve 官方</span>
 </div>
