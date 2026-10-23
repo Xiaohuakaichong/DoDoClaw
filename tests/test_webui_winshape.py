@@ -153,3 +153,9 @@ def test_hidden_overlay_is_not_popped_up_by_resize_or_reset(monkeypatch):
     assert calls == [("hide",)]
     b.fit_overlay(320, 300)
     assert calls == [("hide",)] and b._ov_pending_size == (320, 300)
+
+
+def test_overlay_min_size_allows_compact_pill():
+    src = (webapp.Path(webapp.__file__)).read_text(encoding="utf-8")
+    assert "min_size=(100, 40)" in src
+    assert webapp.OV_COMPACT[0] >= 100 and webapp.OV_COMPACT[1] >= 40

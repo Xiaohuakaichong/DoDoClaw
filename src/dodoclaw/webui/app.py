@@ -679,6 +679,7 @@ def run_webui(debug: bool = False) -> int:
         # Not transparent=True: on WinForms that leaves the Form's grey BackColor
         # around the card and EdgeChromium transparent windows get no input.
         resizable=False,
+        min_size=(100, 40),  # pywebview's default 200x100 kept the compact pill window 100px tall
         hidden=True,
         focus=True,
         background_color=OV_BG,
