@@ -229,7 +229,7 @@ function openCustomForm(id) {
   // Drop prior built-in chrome (tag / model label / 去申请) — custom model lives in the form only.
   $('#prov-tag').innerHTML = '';
   $('#prov-model').textContent = '';
-  const ap0 = $('#btn-apply'); if (ap0) ap0.style.display = 'none';
+  const ap0 = $('#btn-apply'); if (ap0) { ap0.innerHTML = ''; ap0.style.display = 'none'; }
 }
 
 function renderCoach(s) {
@@ -248,6 +248,7 @@ function renderCoach(s) {
     // Keep form title from openCustomForm; never reuse prior built-in chrome.
     $('#prov-tag').innerHTML = '';
     $('#prov-model').textContent = '';
+    ap.innerHTML = '';
     ap.style.display = 'none';
   } else {
     $('#prov-name').textContent = k.provider_name;
