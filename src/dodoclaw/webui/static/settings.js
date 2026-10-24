@@ -76,7 +76,8 @@ function renderRem(s) {
 // ks: none | switch | typing | testing | ok | retest | error — set on #c-coach[data-ks]
 let busy = null;        // null | 'save' | 'retest'
 let changing = false;   // 更换 Key: input reopened over a configured key
-let saveErr = '';       // key rejected before saving (format / write error)
+let saveErr = '';
+let saveKind = '';   // kind of the last failed save (只填 Key: auth / network / bad_address)       // key rejected before saving (format / write error)
 let localTest = null;   // 20 s JS timeout result, until the next real test
 let testSeq = 0;        // request id: only the newest test / switch may update the card
 let switchTimer = null; // auto-test after a provider switch, debounced
@@ -549,6 +550,18 @@ async function runTest() {
 
 // 保存并测试: save first, then test (a failed test keeps the key). The input is cleared
 // as soon as save_key returns, whatever the result.
+// 只填 Key：测试失败的红字放在 Key 输入框下方（Key 没保存，仍停在只填 Key 模式）
+function renderFillErr() {
+  const row = $('#fill-err-row'); if (!row) return;
+  const fill = S && S.voice && S.voice.key_fill;
+  const on = !!(fill && saveErr);
+  row.hidden = !on;
+  if (!on) { $('#fill-err').innerHTML = ''; return; }
+  const head = saveKind === 'auth' ? 'Key 无效'
+    : (saveKind === 'network' || saveKind === 'bad_address') ? '网络不通 / 接口地址连不上' : '没能验证 Key';
+  $('#fill-err').innerHTML = `<div class="ferr on"><b>${esc(head)}</b>：${esc(saveErr)}。Key 没有保存，检查后重新粘贴。</div>`;
+}
+
 async function saveKey() {
   const inp = $('#key-in');
   if (busy) return;
@@ -556,16 +569,19 @@ async function saveKey() {
   // 去填 Key：存那一家的 Key，不改教练服务商；成功后自动滚回语音卡
   const fill = S.voice && S.voice.key_fill;
   const pid = fill ? fill.provider : S.key.provider;
-  busy = 'save'; saveErr = ''; localTest = null; renderCoachKs();
+  busy = 'save'; saveErr = ''; saveKind = ''; localTest = null; renderCoachKs(); renderFillErr();
   let r;
   try { r = await withTimeout(api().save_key(pid, inp.value), TEST_WAIT_MS); }
   catch (e) { r = e && e.timeout ? { timeout: true } : { ok: false, kind: 'store', reason_zh: '没能保存，详情见日志', saved: false }; }
   inp.value = ''; setEye(false);
   busy = null;
-  if (r.timeout) localTest = { ...TIMEOUT };
-  else if (r.saved === false) saveErr = r.reason_zh || '没能保存，详情见日志';
+  if (r.timeout && fill) { saveErr = '等了 20 秒还没测完，检查网络后再试'; saveKind = 'network'; }
+  else if (r.timeout) localTest = { ...TIMEOUT };
+  else if (r.saved === false) { saveErr = r.reason_zh || '没能保存，详情见日志'; saveKind = r.kind || ''; }
   else { changing = false; flashSaved(); if (r.msg && !r.fill_only) toast(r.msg, { icon: 'alert' }); }
   await refresh();
+  renderFillErr();
+  if (r && r.fill_only && !r.ok) $('#key-in').focus();
   if (r && r.fill_only && r.ok) {
     jumpBack = r.back === 'tts' ? 'tts' : 'stt';
     // 用户是为了用这一块才去填 Key：保存成功后顺手打开它（和 jump-back 稿一致）
@@ -588,7 +604,7 @@ function setEye(show) {
   $('#btn-eye use').setAttribute('href', show ? '#eye-off' : '#eye');
   $('#btn-eye').title = show ? '隐藏输入内容' : '显示输入内容（只在保存前可看）';
 }
-function resetKeyInput() { $('#key-in').value = ''; setEye(false); saveErr = ''; }
+function resetKeyInput() { $('#key-in').value = ''; setEye(false); saveErr = ''; saveKind = ''; renderFillErr(); }
 
 // 选中即生效：写服务商和默认模型，热重载，没有确认框。
 // 换到有 Key 的一家马上显示“测试中”，停手 0.4 秒后只测最后选中的那一家。
@@ -675,7 +691,7 @@ function wireProvMenu() {
 function wireCoach() {
   wireProvMenu();
   const inp = $('#key-in');
-  inp.oninput = () => { saveErr = ''; renderCoachKs(); };
+  inp.oninput = () => { saveErr = ''; saveKind = ''; renderCoachKs(); renderFillErr(); };
   inp.onkeydown = e => {
     if (e.key === 'Enter') saveKey();
     else if (e.key === 'Escape' && changing) { resetKeyInput(); changing = false; renderCoachKs(); }
@@ -796,6 +812,8 @@ onReady(async () => {
     }
     const b = $('#btn-preview'); if (b.classList.contains('busy')) return;
     b.classList.add('busy');
+    const cloud = S.voice && S.voice.tts_backend !== 'edge';
+    if (cloud) toast('正在合成试听，最多等 20 秒…', { icon: 'info' });
     try { const r = await api().preview_tts(); if (!r || !r.ok) toast((r && r.msg) || '试听失败，详情见日志', { icon: 'alert' }); }
     catch (e) { toast('试听失败，详情见日志', { icon: 'alert' }); }
     finally { b.classList.remove('busy'); }
@@ -833,7 +851,11 @@ onReady(async () => {
     c.classList.remove('flash'); void c.offsetWidth; c.classList.add('flash');
     setTimeout(() => { try { $('#key-in').focus(); } catch (_) {} }, 50);
   });
-  $('#btn-hotkey').onclick = () => toast('全局快捷键还在做，先点麦克风提问');
+  $('#btn-hotkey').onclick = () => toast('全局快捷键下一版提供，现在先点麦克风提问', { icon: 'info' });
+  $('#btn-fill-apply').onclick = async () => {
+    const f = S.voice && S.voice.key_fill; if (!f) return;
+    if (!(await api().open_key_page(f.provider, 'key'))) toast('没能打开浏览器，详情见日志', { icon: 'alert' });
+  };
   // overlay & motion
   $('#btn-ovpos').onclick = async () => toast((await api().reset_overlay_pos()) ? '小窗已回到默认位置' : '小窗还没打开，进对局后再试');
   $('#sw-auto').onclick = () => save({ auto_overlay: !S.ui.auto_overlay });

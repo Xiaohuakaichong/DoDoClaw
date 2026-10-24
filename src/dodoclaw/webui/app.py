@@ -56,7 +56,7 @@ VOICE_ZH = {
     "zh-CN-YunxiNeural": "云希（男声）",
     "zh-CN-YunyangNeural": "云扬（男声）",
 }
-MSG_NO_PREVIEW = "这个服务商暂不支持试听，打开播报后提醒会直接用它念"
+MSG_PREVIEW_NEED_KEY = "先填确认 Key 后才能试听"
 
 
 def _ui_backend(bid: str) -> str:
@@ -711,8 +711,8 @@ class Bridge:
             "tts_voices": voices,
             "tts_voice": voice_id,
             "tts_voice_zh": voice_zh,
-            "preview_ok": tts_ui == "edge",
-            "preview_off_zh": "" if tts_ui == "edge" else MSG_NO_PREVIEW,
+            "preview_ok": tts_ui == "edge" or not self._missing_key(tts_bid, key),
+            "preview_off_zh": "" if (tts_ui == "edge" or not self._missing_key(tts_bid, key)) else MSG_PREVIEW_NEED_KEY,
             "tts_available": self._tts_available(),
             "tts_missing_zh": tts_preview.MSG_NO_EDGE_SHORT,
             "tts_missing_detail_zh": tts_preview.MSG_NO_EDGE_DETAIL,
@@ -937,6 +937,19 @@ class Bridge:
         else:
             spec = get_provider(pid)
             env_var, log_id = spec.key_env, spec.id
+        if fill_only:
+            # 只填 Key：先用这家的轻量接口验 Key；失败不保存、停在只填 Key 模式
+            from dodoclaw.webui import voice_keycheck
+
+            try:
+                cleaned = keystore.clean_key(key if isinstance(key, str) else "")
+            except keystore.KeyStoreError as exc:
+                return {**self._key_fail("invalid", exc.reason_zh), "fill_only": True}
+            chk = voice_keycheck.verify(pid, cleaned)
+            cleaned = ""
+            if not chk.get("ok"):
+                return {**self._key_fail(chk.get("kind") or "unknown", chk.get("reason_zh") or "验证 Key 失败"),
+                        "fill_only": True}
         try:
             keystore.save_key(env_var, key if isinstance(key, str) else "")
         except keystore.KeyStoreError as exc:
@@ -948,7 +961,7 @@ class Bridge:
         self._switched_from = ""
         back = ""
         if fill_only:
-            # only store the Key; do not switch coach.provider / do not test the coach
+            # Key verified above; do not switch coach.provider / do not test the coach
             purpose = fill.get("purpose") or "stt"
             self._key_fill = None
             stt_msg = self._follow_provider_stt()
@@ -956,7 +969,7 @@ class Bridge:
             return {
                 "ok": True,
                 "kind": "ok",
-                "reason_zh": "已保存",
+                "reason_zh": "连接正常",
                 "ms": None,
                 "model": "",
                 "configured": True,
@@ -1303,13 +1316,31 @@ class Bridge:
         """试听 with Edge TTS only (tts_preview is Edge-only). Cloud backends: disabled with reason."""
         from dodoclaw.webui import tts_preview
 
-        if _ui_backend(self._tts_choice()) != "edge":
-            return {"ok": False, "msg": MSG_NO_PREVIEW}
+        bid = self._tts_choice()
+        if _ui_backend(bid) != "edge":
+            return self._preview_cloud(bid)
         try:
             return tts_preview.preview(tts_preview.edge_voice(self._tts_runtime("edge")["tts_voice"]))
         except Exception:
             logger.exception("tts preview failed")
             return {"ok": False, "msg": tts_preview.MSG_UNKNOWN}
+
+    def _preview_cloud(self, bid: str) -> dict[str, Any]:
+        """试听 for 阶跃 / 硅基流动: synthesize the fixed line in the cloud and play it (20 s cap)."""
+        from dodoclaw.voice.tts import create_tts
+        from dodoclaw.webui import tts_preview
+
+        if self._missing_key(bid, self._key_status()):
+            return {"ok": False, "msg": MSG_PREVIEW_NEED_KEY}
+        try:
+            api_key, base_url = self._svc._audio_credentials(bid)
+            rt = self._tts_runtime(bid)
+            tts = create_tts(bid, api_key=api_key, base_url=base_url, model=rt["tts_model"], voice=rt["tts_voice"])
+            api_key = ""
+        except Exception:
+            logger.exception("tts preview setup failed")
+            return {"ok": False, "msg": tts_preview.MSG_UNKNOWN}
+        return tts_preview.preview_cloud(tts)
 
     def rewrite_cfg(self) -> dict[str, Any]:
         from dodoclaw.gsi_install import install_gsi_cfg

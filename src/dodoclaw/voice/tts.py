@@ -76,63 +76,27 @@ class StepFunTTS(TextToSpeech):
         self.voice = voice
         self.instruction = instruction
 
-    def speak(self, text: str) -> None:
-        if not (text or "").strip():
-            return
+    def synthesize(self, text: str, out: Path, timeout: float = 45.0) -> None:
+        """Write ``text`` as mp3 to ``out`` (raises on failure / empty audio)."""
         # API max ~1000 chars for input
-        text = text.strip()
+        text = (text or "").strip()
         if len(text) > 900:
             text = text[:899] + "…"
 
         from openai import OpenAI
 
-        from dodoclaw.voice.audio_io import play_audio_file
-
-        client = OpenAI(api_key=self.api_key, base_url=self.base_url, timeout=45.0)
+        client = OpenAI(api_key=self.api_key, base_url=self.base_url, timeout=timeout,
+                        max_retries=0 if timeout < 45.0 else 2)
         extra = {}
         if self.model.startswith("stepaudio-2.5") and self.instruction:
             extra["instruction"] = self.instruction
+        _speech_to_file(client, out, model=self.model, voice=self.voice, input=text,
+                        response_format="mp3", extra_body=extra or None)
 
-        with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as tmp:
-            out = Path(tmp.name)
-
-        try:
-            try:
-                with client.audio.speech.with_streaming_response.create(
-                    model=self.model,
-                    voice=self.voice,
-                    input=text,
-                    response_format="mp3",
-                    extra_body=extra or None,
-                ) as response:
-                    response.stream_to_file(out)
-            except Exception:
-                logger.debug("streaming speech failed; non-stream", exc_info=True)
-                response = client.audio.speech.create(
-                    model=self.model,
-                    voice=self.voice,
-                    input=text,
-                    response_format="mp3",
-                    extra_body=extra or None,
-                )
-                data = getattr(response, "content", None)
-                if data is None and hasattr(response, "read"):
-                    data = response.read()
-                if data is None and hasattr(response, "stream_to_file"):
-                    response.stream_to_file(out)
-                    data = b""
-                if data:
-                    out.write_bytes(data)
-
-            if out.stat().st_size < 32:
-                raise RuntimeError("TTS 返回空音频（检查模型/音色/额度）")
-            play_audio_file(out)
-        finally:
-            try:
-                out.unlink(missing_ok=True)
-            except OSError:
-                pass
-
+    def speak(self, text: str) -> None:
+        if not (text or "").strip():
+            return
+        _speak_via(self, text)
 
 
 class SiliconFlowTTS(TextToSpeech):
@@ -157,53 +121,60 @@ class SiliconFlowTTS(TextToSpeech):
         v = (voice or "anna").strip()
         self.voice = v if ":" in v else f"{self.model}:{v}"
 
-    def speak(self, text: str) -> None:
-        if not (text or "").strip():
-            return
-        text = text.strip()
+    def synthesize(self, text: str, out: Path, timeout: float = 45.0) -> None:
+        """Write ``text`` as mp3 to ``out`` (raises on failure / empty audio)."""
+        text = (text or "").strip()
         if len(text) > 900:
             text = text[:899] + "…"
 
         from openai import OpenAI
 
-        from dodoclaw.voice.audio_io import play_audio_file
+        client = OpenAI(api_key=self.api_key, base_url=self.base_url, timeout=timeout,
+                        max_retries=0 if timeout < 45.0 else 2)
+        _speech_to_file(client, out, model=self.model, voice=self.voice, input=text, response_format="mp3")
 
-        client = OpenAI(api_key=self.api_key, base_url=self.base_url, timeout=45.0)
-        with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as tmp:
-            out = Path(tmp.name)
+    def speak(self, text: str) -> None:
+        if not (text or "").strip():
+            return
+        _speak_via(self, text)
+
+
+def _speech_to_file(client, out: Path, **kw) -> None:
+    """OpenAI-compatible audio.speech → mp3 file; streaming first, then non-stream."""
+    kw = {k: v for k, v in kw.items() if v is not None}
+    try:
+        with client.audio.speech.with_streaming_response.create(**kw) as response:
+            response.stream_to_file(out)
+    except Exception as exc:
+        if getattr(exc, "status_code", None) in (401, 403):
+            raise  # bad Key: no point retrying non-stream
+        logger.debug("streaming speech failed; non-stream", exc_info=True)
+        response = client.audio.speech.create(**kw)
+        data = getattr(response, "content", None)
+        if data is None and hasattr(response, "read"):
+            data = response.read()
+        if data is None and hasattr(response, "stream_to_file"):
+            response.stream_to_file(out)
+            data = b""
+        if data:
+            out.write_bytes(data)
+    if not out.exists() or out.stat().st_size < 32:
+        raise RuntimeError("TTS 返回空音频（检查模型/音色/额度）")
+
+
+def _speak_via(tts, text: str) -> None:
+    from dodoclaw.voice.audio_io import play_audio_file
+
+    with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as tmp:
+        out = Path(tmp.name)
+    try:
+        tts.synthesize(text, out)
+        play_audio_file(out)
+    finally:
         try:
-            try:
-                with client.audio.speech.with_streaming_response.create(
-                    model=self.model,
-                    voice=self.voice,
-                    input=text,
-                    response_format="mp3",
-                ) as response:
-                    response.stream_to_file(out)
-            except Exception:
-                logger.debug("siliconflow streaming speech failed; non-stream", exc_info=True)
-                response = client.audio.speech.create(
-                    model=self.model,
-                    voice=self.voice,
-                    input=text,
-                    response_format="mp3",
-                )
-                data = getattr(response, "content", None)
-                if data is None and hasattr(response, "read"):
-                    data = response.read()
-                if data is None and hasattr(response, "stream_to_file"):
-                    response.stream_to_file(out)
-                    data = b""
-                if data:
-                    out.write_bytes(data)
-            if out.stat().st_size < 32:
-                raise RuntimeError("TTS 返回空音频（检查模型/音色/额度）")
-            play_audio_file(out)
-        finally:
-            try:
-                out.unlink(missing_ok=True)
-            except OSError:
-                pass
+            out.unlink(missing_ok=True)
+        except OSError:
+            pass
 
 
 def create_tts(

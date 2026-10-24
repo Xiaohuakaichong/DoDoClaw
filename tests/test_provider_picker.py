@@ -614,8 +614,34 @@ def test_stale_test_from_before_a_switch_is_not_recorded(world, monkeypatch):
 
 
 # ── D13 去填 Key / voice state ───────────────────────────
+def _mock_models(monkeypatch, handler):
+    """Route voice_keycheck's GET /models through an httpx MockTransport (no network)."""
+    import httpx
+
+    from dodoclaw.webui import voice_keycheck
+
+    real = voice_keycheck.verify
+    seen = []
+
+    def fake(pid, key, **kw):
+        def h(req):
+            seen.append((str(req.url), req.headers.get("authorization", "")[:7]))
+            return handler(req)
+        return real(pid, key, client=httpx.Client(transport=httpx.MockTransport(h)), timeout=0.5)
+
+    monkeypatch.setattr(voice_keycheck, "verify", fake)
+    return seen
+
+
+def _sf_flag():
+    return bool(__import__("dodoclaw.webui.keycheck", fromlist=["env_flags"]).env_flags().get("SILICONFLOW_API_KEY"))
+
+
 def test_key_fill_saves_without_switching_coach(world, monkeypatch):
+    import httpx
+
     b, svc = world.b, world.svc
+    seen = _mock_models(monkeypatch, lambda req: httpx.Response(200, json={"data": []}))
     b.reload_env()
     assert svc.provider_id == "stepfun_plan"
     r = b.begin_key_fill("siliconflow", "stt")
@@ -625,8 +651,68 @@ def test_key_fill_saves_without_switching_coach(world, monkeypatch):
     assert out["ok"] and out.get("fill_only") is True and out.get("back") == "stt"
     assert svc.provider_id == "stepfun_plan"  # coach unchanged
     assert b._key_fill is None
-    flags = __import__("dodoclaw.webui.keycheck", fromlist=["env_flags"]).env_flags()
-    assert flags.get("SILICONFLOW_API_KEY") is True
+    assert _sf_flag() is True
+    assert seen == [("https://api.siliconflow.cn/v1/models", "Bearer ")]
+
+
+@pytest.mark.parametrize("case", ["401", "403", "timeout", "refused"])
+def test_key_fill_failed_test_does_not_save(world, monkeypatch, case):
+    import httpx
+
+    from dodoclaw.coach import errors
+
+    def handler(req):
+        if case in ("401", "403"):
+            return httpx.Response(int(case), json={"error": "invalid api key"})
+        if case == "timeout":
+            raise httpx.ReadTimeout("timed out", request=req)
+        raise httpx.ConnectError("connection refused", request=req)
+
+    _mock_models(monkeypatch, handler)
+    b, svc = world.b, world.svc
+    b.reload_env()
+    b.begin_key_fill("siliconflow", "stt")
+    out = b.save_key("siliconflow", "sk-sf-bad-KEY-zzzz")
+    assert out["ok"] is False and out["saved"] is False and out["fill_only"] is True
+    want = {"401": ("auth", errors.AUTH), "403": ("auth", errors.AUTH),
+            "timeout": ("network", errors.NETWORK), "refused": ("bad_address", errors.BAD_ADDRESS)}[case]
+    assert (out["kind"], out["reason_zh"]) == want
+    assert "back" not in out  # stays on the coach card
+    assert b._key_fill == {"provider": "siliconflow", "purpose": "stt"}  # still 只填 Key
+    assert _sf_flag() is False  # 失败不保存
+    assert svc.provider_id == "stepfun_plan"
+    assert "sk-sf-bad" not in repr(out)
+
+
+def test_cloud_preview_needs_key_then_plays(world, monkeypatch):
+    from dodoclaw.webui import app as A
+    from dodoclaw.webui import tts_preview
+
+    b = world.b
+    b.reload_env()
+    b.save_settings({"tts_backend": "siliconflow"})
+    v = b.settings_state()["voice"]
+    assert v["preview_ok"] is False and v["preview_off_zh"] == A.MSG_PREVIEW_NEED_KEY
+    assert b.preview_tts() == {"ok": False, "msg": "先填确认 Key 后才能试听"}
+    # with a Key: synthesize in the cloud (mocked) and play
+    import httpx
+    _mock_models(monkeypatch, lambda req: httpx.Response(200, json={"data": []}))
+    b.begin_key_fill("siliconflow", "tts")
+    assert b.save_key("siliconflow", "sk-sf-test-KEY-zzzz")["ok"]
+    got = {}
+
+    def synth(self, text, out, timeout=45.0):
+        got.update(text=text, timeout=timeout, voice=self.voice)
+        Path(out).write_bytes(b"x" * 64)
+
+    monkeypatch.setattr("dodoclaw.voice.tts.SiliconFlowTTS.synthesize", synth)
+    played = []
+    monkeypatch.setattr(tts_preview, "_default_player", lambda p: played.append(p))
+    v = b.settings_state()["voice"]
+    assert v["preview_ok"] is True and v["preview_off_zh"] == ""
+    assert b.preview_tts() == {"ok": True, "msg": ""}
+    assert got["timeout"] == tts_preview.SYNTH_TIMEOUT == 20.0
+    assert got["voice"] == "FunAudioLLM/CosyVoice2-0.5B:anna" and played
 
 
 def test_settings_state_voice_shape(world, monkeypatch):

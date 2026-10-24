@@ -36,6 +36,7 @@ MSG_NO_PLAYER = "没装播放组件，试听不了"
 MSG_PLAY_FAIL = "没能播放声音，检查一下音频输出设备"
 MSG_BUSY = "正在试听，等这句放完"
 MSG_UNKNOWN = "试听失败，详情见日志"
+MSG_TIMEOUT = "等了 20 秒还没合成好，稍后再试"
 
 _lock = threading.Lock()
 SYNTH_TIMEOUT = 20.0  # s; a stuck connection must not keep 试听 busy forever
@@ -110,6 +111,62 @@ def preview(
                 return {"ok": False, "msg": MSG_NETWORK if _is_network_error(exc) else MSG_UNKNOWN}
             try:
                 player(out)
+            except (PlaybackUnavailable, ImportError):
+                return {"ok": False, "msg": MSG_NO_PLAYER}
+            except Exception as exc:
+                logger.warning("tts preview playback failed: %s", type(exc).__name__)
+                return {"ok": False, "msg": MSG_PLAY_FAIL}
+            return {"ok": True, "msg": ""}
+        finally:
+            try:
+                out.unlink(missing_ok=True)
+            except OSError:
+                pass
+    finally:
+        _lock.release()
+
+
+def preview_cloud(tts: Any, text: str = PREVIEW_TEXT) -> dict[str, Any]:
+    """试听 with a cloud TTS (阶跃 / 硅基流动): synthesize ``text`` and play it.
+
+    ``tts`` has ``synthesize(text, path, timeout)`` (writes mp3). Capped at
+    SYNTH_TIMEOUT; errors map to a Chinese reason (coach.errors wording for
+    Key / network problems). Nothing from the exception is shown."""
+    from dodoclaw.coach import errors
+
+    if not _lock.acquire(blocking=False):
+        return {"ok": False, "msg": MSG_BUSY}
+    try:
+        with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as tmp:
+            out = Path(tmp.name)
+        try:
+            box: dict[str, Any] = {}
+
+            def _run() -> None:
+                try:
+                    tts.synthesize(text, out, timeout=SYNTH_TIMEOUT)
+                except BaseException as exc:  # noqa: BLE001 — reported below
+                    box["exc"] = exc
+
+            th = threading.Thread(target=_run, name="tts-preview-cloud", daemon=True)
+            th.start()
+            th.join(SYNTH_TIMEOUT + 1.0)
+            if th.is_alive():
+                logger.warning("cloud tts preview timed out")
+                return {"ok": False, "msg": MSG_TIMEOUT}
+            exc = box.get("exc")
+            if exc is not None:
+                logger.warning("cloud tts preview failed: %s", type(exc).__name__)
+                if "Timeout" in type(exc).__name__:  # SDK / httpx timeout at the 20 s cap
+                    return {"ok": False, "msg": MSG_TIMEOUT}
+                info = errors.classify(exc)
+                if info["kind"] in ("auth", "balance", "plan_expired", "rate_limit", "network", "bad_address"):
+                    return {"ok": False, "msg": info["reason_zh"]}
+                return {"ok": False, "msg": MSG_UNKNOWN}
+            if not out.exists() or out.stat().st_size < 32:
+                return {"ok": False, "msg": MSG_UNKNOWN}
+            try:
+                _default_player(out)
             except (PlaybackUnavailable, ImportError):
                 return {"ok": False, "msg": MSG_NO_PLAYER}
             except Exception as exc:
