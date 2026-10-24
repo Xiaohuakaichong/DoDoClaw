@@ -159,3 +159,38 @@ html,body{height:100%;background:var(--bg-0);overflow:hidden;user-select:none}
 .dlg .dt .ico{width:18px;height:18px;color:var(--danger);flex:none}
 .dlg .dd2{font-size:12.5px;color:var(--text-2);line-height:1.7;margin-top:8px;padding-left:28px}
 .dlg .acts{display:flex;justify-content:flex-end;gap:10px;margin-top:18px}
+
+/* D12 custom providers + STT missing/download */
+.ferr{display:none;font-size:11.5px;color:var(--danger);margin-top:4px;line-height:1.4;width:100%}
+.ferr.on,.row.err .ferr{display:block}
+.clist{display:flex;flex-direction:column;gap:6px;flex:1;min-width:0}
+.clist .ci{display:flex;align-items:center;gap:10px;min-height:44px;padding:8px 12px;border-radius:10px;background:rgba(0,0,0,.22);border:1px solid var(--line);cursor:pointer}
+.clist .ci:hover{border-color:var(--line-2);background:rgba(255,255,255,.04)}
+.clist .ci.cur{border-color:rgba(255,138,61,.45);background:linear-gradient(135deg,rgba(229,72,47,.1),rgba(0,0,0,.2) 70%)}
+.clist .ci .nm{font-weight:700;font-size:13px}
+.clist .ci .ds{font-size:11.5px;color:var(--text-3);font-family:Consolas,"Cascadia Mono",monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:280px}
+.clist .ci .acts{margin-left:auto;display:flex;gap:6px;flex:none}
+.clist .add{display:flex;align-items:center;justify-content:center;gap:6px;min-height:40px;padding:0 12px;border-radius:10px;border:1px dashed var(--line-2);color:var(--brand-2);font-size:13px;font-weight:700;cursor:pointer}
+.clist .add:hover{background:rgba(255,138,61,.06);border-color:rgba(255,138,61,.4)}
+.clist .empty{padding:18px 12px;text-align:center;font-size:12.5px;color:var(--text-3);border-radius:10px;border:1px dashed var(--line)}
+.opt .miss{display:flex;align-items:center;gap:6px;margin-top:6px;font-size:11.5px;color:var(--warn)}
+.opt .miss .ico{width:13px;height:13px;flex:none}
+.opt.stt-miss,.opt.dis-hard{opacity:.45;pointer-events:none;filter:grayscale(.4)}
+.dlbar{height:6px;border-radius:3px;background:rgba(255,255,255,.08);overflow:hidden;margin-top:8px;width:100%}
+.dlbar i{display:block;height:100%;border-radius:3px;background:var(--brand-grad)}
+.opt .dlmeta{display:flex;align-items:center;gap:8px;margin-top:6px;font-size:11.5px;color:var(--text-2)}
+.opt .dlmeta .num{font:600 12px var(--num);color:var(--text)}
+.field.inp{display:flex;align-items:center;gap:8px;min-height:36px;padding:0 12px;border-radius:10px;background:rgba(0,0,0,.28);border:1px solid var(--line);flex:1;min-width:0}
+.field.inp input,.field.inp .val{flex:1;min-width:0;background:transparent;border:0;outline:0;color:var(--text);font:500 13px var(--font)}
+.field.inp.ro{opacity:.85;cursor:default}
+.field.inp.focus{border-color:rgba(255,138,61,.55);box-shadow:0 0 0 2px rgba(255,138,61,.12)}
+.field.inp.err{border-color:var(--danger)}
+.row.stack{flex-direction:column;align-items:stretch;gap:6px}
+.row.stack>.k{width:auto}
+.btn.xs{height:26px;padding:0 8px;font-size:11.5px;border-radius:8px}
+#c-sf,#c-custom,#c-custom-form{display:none}
+#c-coach[data-pane=sf] #c-sf,#c-coach[data-pane=custom] #c-custom,#c-coach[data-pane=custom-form] #c-custom-form{display:block}
+#c-coach[data-pane=sf] #c-preset-key,#c-coach[data-pane=custom] #c-preset-key,#c-coach[data-pane=custom-form] #c-preset-key{display:none}
+#c-coach[data-pane=custom] #c-model-row,#c-coach[data-pane=custom-form] #c-model-row{display:none}
+#mdl-wrap{position:relative;width:280px}
+#mdl-wrap datalist{display:none}

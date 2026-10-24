@@ -215,6 +215,13 @@ a.link{text-decoration:none}
     </div>
      <div class="ddmenu" id="prov-menu" role="listbox" aria-label="服务商" style="left:144px;top:46px" hidden></div>
     </div>
+    <!-- 模型 ID（预设可改；自定义在表单里填） -->
+    <div class="row" id="c-model-row"><span class="k">模型 ID</span><div class="v">
+     <div id="mdl-wrap"><input class="field" id="mdl-in" list="mdl-list" style="width:280px;height:36px;padding:0 12px" placeholder="模型 ID" maxlength="200" autocomplete="off"><datalist id="mdl-list"></datalist></div>
+     <span class="link" id="btn-mdl-reset" style="font-size:12px;flex:none;display:none">恢复默认</span>
+     <span class="hint" id="mdl-hint" style="margin-left:4px">可改成平台上的任意对话模型 ID</span>
+    </div></div>
+    <div id="c-preset-key">
     <!-- API Key：只从这里进 Python（save_key），不会再显示出来 -->
     <div class="row"><span class="k">API Key</span><div class="v">
      <label class="pw ks ks-pw" id="key-box"><svg class="ico"><use href="#key"/></svg><input id="key-in" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="512" placeholder="粘贴 API Key"><span class="eye" id="btn-eye" role="button" title="显示输入内容（只在保存前可看）"><svg class="ico"><use href="#eye"/></svg></span></label>
@@ -233,6 +240,41 @@ a.link{text-decoration:none}
      <div class="envl"><span class="t2">在 exe 同目录的 .env 里加一行</span><span class="mono" style="flex:none" id="key-line">LLM_API_KEY=你的Key</span><span class="hint">变量名跟着当前服务商变</span></div>
      <div class="envl"><span class="btn ghost sm" data-act="open_app_dir"><svg class="ico" style="width:14px;height:14px"><use href="#folder"/></svg>打开文件夹</span><span class="btn ghost sm" data-act="reload_env"><svg class="ico" style="width:14px;height:14px"><use href="#refresh"/></svg>重新读取</span><span class="hint">改完点“重新读取”，不用重启</span></div>
     </div>
+    </div>
+    <!-- D12 硅基流动：固定地址提示（模型/Key 仍走上面的通用行；此块只在需要时补说明） -->
+    <div id="c-sf">
+     <div class="row stack"><span class="k">接口地址</span><div class="v">
+      <div class="field inp ro" title="硅基流动固定地址，不可改"><span class="val">https://api.siliconflow.cn/v1</span><span class="pill mute tiny">固定</span></div>
+      <span class="hint" style="margin-top:4px">OpenAI 兼容接口，国内直连</span>
+     </div></div>
+    </div>
+    <!-- D12 自定义列表 -->
+    <div id="c-custom">
+     <div class="row stack" style="border-top:1px solid var(--line);padding-top:10px"><span class="k">已保存</span><div class="v">
+      <div class="clist" id="custom-list"></div>
+     </div></div>
+    </div>
+    <!-- D12 自定义表单 -->
+    <div id="c-custom-form">
+     <div class="row stack"><span class="k">名称</span><div class="v">
+      <div class="field inp"><input id="cf-name" maxlength="40" placeholder="可选，比如「家里的代理」"></div>
+     </div></div>
+     <div class="row stack" id="cf-url-row"><span class="k">接口地址</span><div class="v">
+      <div class="field inp"><input id="cf-url" placeholder="https://…/v1" spellcheck="false"></div>
+      <div class="ferr e-url" id="cf-err-url">地址连不上 · 检查 URL 或网络后重试</div>
+     </div></div>
+     <div class="row stack" id="cf-model-row"><span class="k">模型 ID</span><div class="v">
+      <div class="field inp"><input id="cf-model" maxlength="200" placeholder="例如 gpt-4o-mini" spellcheck="false"></div>
+      <div class="ferr e-model" id="cf-err-model">模型不存在 · 核对平台上的模型 ID</div>
+     </div></div>
+     <div class="row" id="cf-key-row"><span class="k">API Key</span><div class="v">
+      <label class="pw" id="cf-key-box"><svg class="ico"><use href="#key"/></svg><input id="cf-key" type="password" autocomplete="off" maxlength="512" placeholder="粘贴 API Key"><span class="eye" id="cf-eye" role="button" title="显示输入内容"><svg class="ico"><use href="#eye"/></svg></span></label>
+      <span class="btn primary sm" id="btn-cf-save">保存并测试</span>
+      <span class="btn ghost sm" id="btn-cf-cancel">取消</span>
+      <div class="ferr e-key" id="cf-err-key" style="width:100%">Key 无效 · 可能复制少了一截，或在平台上被删了</div>
+     </div></div>
+     <div class="row"><span class="k" id="cf-res-k">说明</span><div class="v" id="cf-res"><span class="hint">填接口地址和模型 ID，粘贴 Key 后点“保存并测试”。</span></div></div>
+    </div>
    </div>
   </div>
   <div class="card" id="c-tts">
@@ -245,7 +287,7 @@ a.link{text-decoration:none}
   <div class="card" id="c-voice">
    <div class="ch"><span class="gl gi" id="ask-ico" style="background:rgba(255,255,255,.05);color:var(--text-3)"><svg class="ico"><use href="#mic-off"/></svg></span><div><div class="t">语音提问（语音识别）</div><div class="d">默认关闭。教练服务商自带识别（如阶跃）时默认云端识别、共用 Key；不带（如 DeepSeek）默认本地 Whisper</div></div><div class="r"><span class="pill mute" id="ask-pill">未配置语音识别</span><i class="sw" id="sw-ask"></i></div></div>
    <div style="display:flex;gap:10px;margin-top:12px">
-    <div class="opt" id="opt-local" data-m="local"><div class="t"><svg class="ico" style="width:15px;height:15px;color:var(--ok)"><use href="#folder"/></svg>本地 Whisper<span class="tag" id="tag-local"></span></div><div class="d" id="d-local">离线可用，首次下载约 150 MB</div></div>
+    <div class="opt" id="opt-local" data-m="local"><div class="t"><svg class="ico" style="width:15px;height:15px;color:var(--ok)"><use href="#folder"/></svg>本地 Whisper<span class="tag" id="tag-local"></span></div><div class="d" id="d-local">离线可用，首次下载约 150 MB</div><div class="miss" id="local-miss" hidden><svg class="ico"><use href="#alert"/></svg>缺少本地识别组件</div><div id="local-dl" hidden><div class="dlbar"><i id="dl-bar" style="width:0%"></i></div><div class="dlmeta"><span class="num" id="dl-pct">0%</span><span>·</span><span id="dl-meta">准备下载</span><span class="link" id="btn-dl-cancel" style="margin-left:auto;font-size:12px">取消</span><span class="link" id="btn-dl-retry" style="margin-left:auto;font-size:12px" hidden>重试</span></div></div></div>
     <div class="opt" id="opt-cloud" data-m="cloud"><div class="t"><svg class="ico" style="width:15px;height:15px;color:var(--info)"><use href="#spark"/></svg>云端识别<span class="tag" id="tag-cloud"></span></div><div class="d" id="d-cloud">—</div></div>
     <div class="hk" style="display:flex;flex-direction:column;justify-content:center;gap:6px;width:170px"><span class="hint">全局按住说话快捷键</span><div class="field" style="height:32px"><span class="ph">未设置</span><span class="link" id="btn-hotkey" style="margin-left:auto;font-size:12px">设置</span></div></div>
    </div>

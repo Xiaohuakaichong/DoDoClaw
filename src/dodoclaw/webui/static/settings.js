@@ -1,9 +1,13 @@
 // Settings page. A key only goes JS → Python, through save_key(provider_id, key); Python never
 // sends a key back — only "configured" booleans, display names and the env var name.
 let S = null, lastS = null;
+let customFormId = ""; // editing custom id, or "" for new
+let customBusy = false;
+let dlTimer = null;
 const ROWS = {
-  bounty: { n: '赏金符', s: '0:00 起每 3 分钟，报到 15:00 · 4、5 号位默认开', ico: 'coin', cls: 'gold' },
-  runes: { n: '水符 · 强化符', s: '水符 2:00 / 4:00，强化符报到 20:00 · 2 号位默认开', ico: 'rune' },
+  bounty: { n: '赏金符', s: '每 3 分钟（跳过 0:00），提前 20 秒 · 所有位置可开，4、5 号位默认开', ico: 'coin', cls: 'gold' },
+  runes: { n: '河道神符', s: '水符 2:00 / 4:00，强化符 6:00 起每 2 分 · 所有位置可开，2 号位默认开', ico: 'rune' },
+  lotus: { n: '莲花池', s: '6:00 起每 6 分钟整点提醒 · 所有位置可开，3、4、5 号位默认开', ico: 'spark' },
   shrine: { n: '智慧神龛', s: '7:00 起每 7 分钟', ico: 'shrine' },
   cube: { n: '痛苦魔方', s: '15:00 首刷及每次复活 · “魔方 30 秒后刷新”', ico: 'cube', cls: 'warm' },
   roshan: { n: '肉山复活', s: '最早复活时间前提醒 · “肉山快复活了”', ico: 'skull', cls: 'warm' },
@@ -100,10 +104,14 @@ function agoZh(at) {
 function renderProvMenu(s) {
   const k = s.key, rows = s.providers || [];
   $('#prov-menu').innerHTML = rows.map(p => {
-    const st = p.configured ? '<span class="dot ok"></span>已配置' : '未配置';
-    return `<div class="mi${p.current ? ' cur' : ''}" role="option" aria-selected="${p.current}" data-v="${esc(p.id)}">${CK}<div><div class="nm">${esc(p.name)}${tagPill(p.tag, p.id === 'deepseek')}</div><div class="ds">${esc(p.model)} · ${st}${p.hint ? ' · ' + esc(p.hint) : ''}</div></div>${p.apply_url ? `<span class="link ap" data-apply="${esc(p.id)}">去申请 ${EXT}</span>` : ''}</div>`;
-  }).join('') + '<div class="ft" title="config\\settings.yaml">每家的 Key 分开保存，切换不会清掉别家的。<br>通义、Kimi、自定义接口暂时只能在程序目录 config 文件夹里的设置文件中修改。</div>';
-  if (!k.in_picker) $('#prov-menu .ft').insertAdjacentHTML('afterbegin', `现在用的是 ${esc(k.provider_name)}（在设置文件里改的）。<br>`);
+    if (p.kind === 'add_custom') {
+      return `<div class="mi add" role="option" data-v="__add_custom__"><div><div class="nm">${esc(p.name)}</div><div class="ds">${esc(p.subtitle || p.hint || '')}</div></div></div>`;
+    }
+    const ds = p.subtitle || [p.model, p.configured ? '已配置' : '未配置', p.hint].filter(Boolean).join(' · ');
+    return `<div class="mi${p.current ? ' cur' : ''}" role="option" aria-selected="${p.current}" data-v="${esc(p.id)}">${CK}<div><div class="nm">${esc(p.name)}${tagPill(p.tag, p.id === 'deepseek')}</div><div class="ds">${esc(ds)}</div></div>${p.apply_url ? `<span class="link ap" data-apply="${esc(p.id)}">去申请 ${EXT}</span>` : ''}</div>`;
+  }).join('') + '<div class="ft">每家的 Key 分开保存，切换不会清掉别家的。<br>通义、Kimi 也可通过自定义接入。</div>';
+  if (k.is_custom) $('#prov-menu .ft').insertAdjacentHTML('afterbegin', `现在用的是自定义「${esc(k.provider_name)}」。<br>`);
+  else if (!k.in_picker) $('#prov-menu .ft').insertAdjacentHTML('afterbegin', `现在用的是 ${esc(k.provider_name)}。<br>`);
 }
 
 function renderCoachKs() {
@@ -168,34 +176,105 @@ function renderCoachKs() {
   if (res._h !== html) { res.innerHTML = html; res._h = html; }
 }
 
+function coachPane(k) {
+  if (customFormId !== null && customFormId !== undefined && document.getElementById('c-coach').dataset.pane === 'custom-form') return 'custom-form';
+  if (k.is_custom) return 'custom';
+  if (k.provider === 'siliconflow') return 'sf';
+  return 'preset';
+}
+
+function renderCustomList(s) {
+  const list = s.customs || [];
+  const box = $('#custom-list');
+  if (!list.length) {
+    box.innerHTML = '<div class="empty">还没有自定义服务商</div><div class="add" id="btn-custom-add">＋ 添加自定义服务商</div>';
+  } else {
+    box.innerHTML = list.map(c => {
+      const st = c.configured
+        ? '<span class="pill ok tiny"><span class="dot ok" style="width:6px;height:6px"></span>已配置</span>'
+        : '<span class="pill warn tiny"><span class="dot warn" style="width:6px;height:6px"></span>未配置</span>';
+      return `<div class="ci${c.current ? ' cur' : ''}" data-id="${esc(c.id)}"><div><div class="nm">${esc(c.name)}</div><div class="ds">${esc(c.base_url)} · ${esc(c.model)}</div></div><div class="acts">${st}<span class="btn ghost xs" data-edit="${esc(c.id)}">编辑</span><span class="btn ghost xs danger" data-del="${esc(c.id)}">删除</span></div></div>`;
+    }).join('') + '<div class="add" id="btn-custom-add">＋ 添加自定义服务商</div>';
+  }
+  box.querySelectorAll('.ci').forEach(row => {
+    row.onclick = (e) => {
+      if (e.target.closest('[data-edit],[data-del]')) return;
+      pickProvider('custom:' + row.dataset.id);
+    };
+  });
+  box.querySelectorAll('[data-edit]').forEach(b => b.onclick = (e) => { e.stopPropagation(); openCustomForm(b.dataset.edit); });
+  box.querySelectorAll('[data-del]').forEach(b => b.onclick = async (e) => {
+    e.stopPropagation();
+    if (!confirm('删除这个自定义服务商？Key 也会一起删掉。')) return;
+    const r = await api().delete_custom(b.dataset.del);
+    if (!r || !r.ok) toast((r && r.msg) || '删除失败', { icon: 'alert' });
+    else flashSaved();
+    await refresh();
+  });
+  const add = $('#btn-custom-add');
+  if (add) add.onclick = () => openCustomForm('');
+}
+
+function openCustomForm(id) {
+  customFormId = id || '';
+  const c = (S.customs || []).find(x => x.id === customFormId);
+  $('#cf-name').value = c ? (c.name === '自定义接口' ? '' : c.name) : '';
+  $('#cf-url').value = c ? c.base_url : '';
+  $('#cf-model').value = c ? c.model : '';
+  $('#cf-key').value = '';
+  ['cf-err-url','cf-err-model','cf-err-key'].forEach(id => { const el = $('#'+id); el.classList.remove('on'); });
+  $('#cf-res').innerHTML = '<span class="hint">填接口地址和模型 ID，粘贴 Key 后点“保存并测试”。</span>';
+  $('#c-coach').dataset.pane = 'custom-form';
+  $('#prov-name').textContent = customFormId ? '编辑自定义' : '＋ 自定义（OpenAI 兼容）';
+}
+
 function renderCoach(s) {
   const k = s.key, v = s.voice;
+  const pane = (() => {
+    // Keep form open while editing
+    if ($('#c-coach').dataset.pane === 'custom-form' && customFormId !== undefined) return 'custom-form';
+    if (k.is_custom) return 'custom';
+    if (k.provider === 'siliconflow') return 'sf';
+    return 'preset';
+  })();
+  if (pane !== 'custom-form') $('#c-coach').dataset.pane = pane;
   // 服务商
-  $('#prov-name').textContent = k.provider_name;
-  $('#prov-tag').innerHTML = k.in_picker ? tagPill(k.provider_tag, k.provider === 'deepseek') : '';
-  $('#prov-model').textContent = `模型 ${k.model}`;
+  if (pane !== 'custom-form') {
+    $('#prov-name').textContent = k.provider_name;
+    $('#prov-tag').innerHTML = (k.in_picker || k.is_custom) ? tagPill(k.provider_tag || '', k.provider === 'deepseek') : '';
+  }
+  $('#prov-model').textContent = k.model ? `模型 ${k.model}` : '';
   const ap = $('#btn-apply');
   ap.innerHTML = `去申请 ${esc(k.provider_short)} Key ${EXT}`;
   ap.style.display = k.apply ? '' : 'none';
   renderProvMenu(s);
+  renderCustomList(s);
+  // 模型 combobox（预设）
+  const mdl = $('#mdl-in'), list = $('#mdl-list');
+  if (mdl && pane !== 'custom' && pane !== 'custom-form') {
+    if (document.activeElement !== mdl) mdl.value = k.model || '';
+    list.innerHTML = (k.models || []).map(m => `<option value="${esc(m)}"></option>`).join('');
+    const isDefault = !k.model || k.model === k.default_model;
+    $('#btn-mdl-reset').style.display = isDefault ? 'none' : '';
+    $('#mdl-hint').textContent = k.provider === 'siliconflow' ? '可改成平台上的任意对话模型 ID' : '可改，一般用默认即可';
+  }
   // Key
   $("#key-in").placeholder = `粘贴 ${k.provider_short} 的 API Key`;
   $('#key-line').textContent = `${k.key_env}=你的Key`;
   renderCoachKs();
-  // 播报 · 缺少声音组件 → 声音行换成提示，试听和开关都灰掉并说明原因
-  const miss = v.tts_available === false;
-  document.documentElement.classList.toggle('st-tts-missing', miss);
+  // 播报 · 缺少声音组件
+  const missTts = v.tts_available === false;
+  document.documentElement.classList.toggle('st-tts-missing', missTts);
   $('#tts-pill').className = 'pill tts-ok ' + (v.tts_on ? 'ok' : 'mute');
   $('#tts-pill').innerHTML = v.tts_on ? '<span class="dot ok"></span>已开启' : '未开启';
   const sw = $('#sw-tts');
-  sw.classList.toggle('on', v.tts_on && !miss);
-  sw.classList.toggle('dis', miss);
-  sw.setAttribute('aria-disabled', String(miss));
-  sw.title = miss ? '缺少声音组件，开不了' : '';
+  sw.classList.toggle('on', v.tts_on && !missTts);
+  sw.classList.toggle('dis', missTts);
+  sw.setAttribute('aria-disabled', String(missTts));
+  sw.title = missTts ? '缺少声音组件，开不了' : '';
   $('#tts-name').innerHTML = `<span class="tn">${esc(v.preview_voice_zh || 'Edge 免费声音')}</span>`;
-  // 语音提问
+  // 语音提问 + STT cards (missing / downloading / ready)
   $('#sw-ask').classList.toggle('on', v.ask_on);
-  // 语音提问关着时，识别方式和快捷键都不能点
   $('#c-voice').classList.toggle('ask-off', !v.ask_on);
   document.querySelectorAll('#c-voice .opt').forEach(o => { o.classList.toggle('dis', !v.ask_on); o.setAttribute('aria-disabled', String(!v.ask_on)); });
   $('#btn-hotkey').setAttribute('aria-disabled', String(!v.ask_on));
@@ -203,14 +282,49 @@ function renderCoach(s) {
   $('#ask-pill').textContent = v.ask_on ? `已开启 · ${v.stt_zh}` : '未配置语音识别';
   $('#ask-ico').style.color = v.ask_on ? 'var(--info)' : 'var(--text-3)';
   $('#ask-ico use').setAttribute('href', v.ask_on ? '#mic' : '#mic-off');
-  $('#opt-local').classList.toggle('sel', v.stt_mode === 'local');
-  $('#opt-cloud').classList.toggle('sel', v.stt_mode === 'cloud');
+  const whReady = !!v.whisper_ready;
+  const dl = v.whisper_download || {};
+  const downloading = dl.phase === 'downloading' || dl.phase === 'checking';
+  const dlErr = dl.phase === 'error' || dl.phase === 'cancelled';
+  const local = $('#opt-local'), cloud = $('#opt-cloud');
+  local.classList.toggle('sel', v.stt_mode === 'local' && whReady);
+  cloud.classList.toggle('sel', v.stt_mode === 'cloud' || (!whReady && v.stt_mode === 'local'));
+  const modelReady = !!v.whisper_model_ready;
+  local.classList.toggle('stt-miss', !whReady);
+  local.classList.toggle('dis-hard', !whReady);
+  $('#local-miss').hidden = whReady;
+  const showDl = whReady && (downloading || dlErr || (!modelReady && v.stt_mode === 'local'));
+  $('#local-dl').hidden = !showDl;
+  if (showDl) {
+    $('#dl-bar').style.width = (dl.pct || 0) + '%';
+    $('#dl-pct').textContent = (dl.pct || 0) + '%';
+    const mb = ((dl.bytes_done || 0) / 1048576).toFixed(0) + ' / ' + ((dl.bytes_total || 150 * 1048576) / 1048576).toFixed(0) + ' MB';
+    $('#dl-meta').textContent = dlErr ? (dl.error_zh || '下载失败') : mb;
+    $('#btn-dl-cancel').hidden = !!dlErr;
+    $('#btn-dl-retry').hidden = !dlErr;
+  }
   const tag = (el, html) => { el.innerHTML = html; };
   const def = '<span class="pill brand" style="height:18px;font-size:10px">默认</span>';
-  tag($('#tag-local'), v.stt_default === 'local' ? def : '');
-  tag($('#tag-cloud'), v.stt_default === 'cloud' ? def : '<span class="pill warn" style="height:18px;font-size:10px">需要单独的 Key</span>');
-  $('#d-cloud').textContent = k.has_stt ? '和教练用同一个 Key' : `${k.provider_short} 不带识别，要另配阶跃 Key`;
-  $('#d-local').textContent = v.whisper_ready ? '离线可用，不需要 Key' : '离线可用，首次下载约 150 MB';
+  // 缺少组件时：默认标签挂到云端，不挂本地
+  if (!whReady) {
+    tag($('#tag-local'), '');
+    tag($('#tag-cloud'), def);
+    $('#d-local').textContent = '离线可用，首次下载约 150 MB';
+  } else if (downloading) {
+    tag($('#tag-local'), '<span class="pill mute tag" style="height:18px;font-size:10px">下载中</span>');
+    tag($('#tag-cloud'), v.stt_default === 'cloud' ? def : '');
+    $('#d-local').textContent = '首次使用需下载识别模型（约 150 MB），组件已随包安装';
+  } else {
+    tag($('#tag-local'), v.stt_default === 'local' ? def : '');
+    tag($('#tag-cloud'), v.stt_default === 'cloud' ? def : (v.cloud_key_ready ? '' : '<span class="pill warn" style="height:18px;font-size:10px">需要 Key</span>'));
+    $('#d-local').textContent = '离线可用，首次下载约 150 MB';
+  }
+  $('#d-cloud').textContent = v.cloud_share_zh || (k.has_stt ? '和教练用同一个 Key' : `${k.provider_short} 不带识别，请配硅基流动或阶跃 Key`);
+  // Poll download progress
+  if (downloading) {
+    clearTimeout(dlTimer);
+    dlTimer = setTimeout(async () => { try { await refresh(); } catch (_) {} }, 800);
+  }
 }
 
 function renderOverlay(s) {
@@ -288,7 +402,10 @@ function resetKeyInput() { $('#key-in').value = ''; setEye(false); saveErr = '';
 // 选中即生效：写服务商和默认模型，热重载，没有确认框。
 // 换到有 Key 的一家马上显示“测试中”，停手 0.4 秒后只测最后选中的那一家。
 async function pickProvider(id) {
-  if (busy === 'save') return toast('正在保存 Key，等一下再换', { icon: 'info' });
+  if (busy === 'save' || customBusy) return toast('正在保存 Key，等一下再换', { icon: 'info' });
+  if (id === '__add_custom__') { openCustomForm(''); return; }
+  // Leaving the custom form
+  if ($('#c-coach').dataset.pane === 'custom-form') { customFormId = undefined; }
   clearTimeout(switchTimer);
   const seq = ++testSeq;  // any test still out belongs to the old provider: ignore it
   busy = null;
@@ -446,7 +563,17 @@ onReady(async () => {
     finally { b.classList.remove('busy'); }
   };
   $('#sw-ask').onclick = () => save({ voice_ask: !S.voice.ask_on });
-  document.querySelectorAll('.opt').forEach(o => o.onclick = () => { if (S.voice.ask_on) save({ stt_mode: o.dataset.m }); });
+  document.querySelectorAll('.opt').forEach(o => o.onclick = async () => {
+    if (!S.voice.ask_on) return;
+    if (o.dataset.m === 'local' && !S.voice.whisper_ready) {
+      toast('缺少本地识别组件', { icon: 'info' }); // only if truly missing package; download UI handles first-use
+      return;
+    }
+    if (o.dataset.m === 'local' && S.voice.whisper_ready && !(S.voice.whisper_model_ready)) {
+      await api().start_whisper_download();
+    }
+    await save({ stt_mode: o.dataset.m });
+  });
   $('#btn-hotkey').onclick = () => { if (S.voice.ask_on) toast('全局快捷键还在做，先点麦克风提问'); };
   // overlay & motion
   $('#btn-ovpos').onclick = async () => toast((await api().reset_overlay_pos()) ? '小窗已回到默认位置' : '小窗还没打开，进对局后再试');
@@ -465,5 +592,53 @@ onReady(async () => {
   $('#btn-update').onclick = () => toast('检查更新还在做，新版本会发在社区里');
   await refresh();
   poll(s => { lastS = s; renderTopbar(s); applyMotion(s); }, 1500);
-  setInterval(() => { if (document.querySelector('#p-adv.on')) refresh(); }, 2000);
+  setInterval(() => { if (document.querySelector('#p-adv.on')) 
+// D12: model override, custom form, whisper download
+$('#mdl-in').addEventListener('change', async () => {
+  const r = await api().save_coach_model($('#mdl-in').value.trim());
+  if (!r || !r.ok) toast((r && r.msg) || '没能保存模型', { icon: 'alert' }); else flashSaved();
+  await refresh();
+});
+$('#btn-mdl-reset').onclick = async () => {
+  const r = await api().save_coach_model('');
+  if (!r || !r.ok) toast((r && r.msg) || '没能恢复默认', { icon: 'alert' }); else flashSaved();
+  await refresh();
+};
+$('#btn-cf-cancel').onclick = () => { customFormId = undefined; $('#c-coach').dataset.pane = ''; refresh(); };
+$('#cf-eye').onclick = () => {
+  const inp = $('#cf-key'); const show = inp.type === 'password';
+  inp.type = show ? 'text' : 'password';
+  $('#cf-eye use').setAttribute('href', show ? '#eye-off' : '#eye');
+};
+$('#btn-cf-save').onclick = async () => {
+  if (customBusy) return;
+  customBusy = true;
+  ['cf-err-url','cf-err-model','cf-err-key'].forEach(id => $('#'+id).classList.remove('on'));
+  $('#cf-res').innerHTML = '<span class="t2">正在请求自定义接口，最多等 15 秒…</span>';
+  $('#btn-cf-save').classList.add('busy');
+  let r;
+  try {
+    r = await withTimeout(api().save_custom($('#cf-name').value, $('#cf-url').value, $('#cf-model').value, $('#cf-key').value, customFormId || ''), TEST_WAIT_MS);
+  } catch (e) {
+    r = e && e.timeout ? { ok: false, reason_zh: '等了 20 秒还没有回应', field: 'url' } : { ok: false, reason_zh: '没能保存', field: '' };
+  }
+  customBusy = false; $('#btn-cf-save').classList.remove('busy');
+  $('#cf-key').value = '';
+  if (r.field === 'url') $('#cf-err-url').classList.add('on');
+  if (r.field === 'model') $('#cf-err-model').classList.add('on');
+  if (r.field === 'key') $('#cf-err-key').classList.add('on');
+  if (r.ok) {
+    customFormId = undefined;
+    flashSaved();
+    $('#cf-res').innerHTML = `<span style="display:flex;align-items:center;gap:10px"><span class="pill ok"><span class="dot ok"></span>连接正常</span><span class="t2">${esc(r.model || '')}${r.ms != null ? ' · 首个回复 <b class="num">' + (r.ms/1000).toFixed(1) + '</b> 秒' : ''}</span></span>`;
+  } else {
+    $('#cf-res').innerHTML = `<div class="callout err"><svg class="ico"><use href="#alert"/></svg><div><div class="t">${esc(r.reason_zh || '没连上')}</div><div class="d">提醒不受影响。</div></div></div>`;
+  }
+  await refresh();
+  if (r.ok) $('#c-coach').dataset.pane = 'custom';
+};
+$('#btn-dl-cancel').onclick = async () => { await api().cancel_whisper_download(); await refresh(); };
+$('#btn-dl-retry').onclick = async () => { await api().start_whisper_download(); await refresh(); };
+
+refresh(); }, 2000);
 });
