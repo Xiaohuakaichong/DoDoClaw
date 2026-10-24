@@ -21,7 +21,9 @@ from typing import Protocol
 from dodoclaw.providers import PROVIDERS
 
 # Only key variables may be written from the settings page.
-ALLOWED_VARS: frozenset[str] = frozenset({p.key_env for p in PROVIDERS.values()} | {"LLM_API_KEY"})
+# Custom providers use CUSTOM_<ID>_API_KEY (see webui.customs).
+_BASE_ALLOWED: frozenset[str] = frozenset({p.key_env for p in PROVIDERS.values()} | {"LLM_API_KEY"})
+ALLOWED_VARS: frozenset[str] = _BASE_ALLOWED  # kept for tests / imports; use allowed() for checks
 
 MSG_EMPTY = "Key 是空的，先粘贴进来"
 MSG_NEWLINE = "Key 里有换行，只粘贴一行"
@@ -168,16 +170,22 @@ def store() -> KeyStore:
     return _store
 
 
+def allowed(env_var: str) -> bool:
+    from dodoclaw.webui.customs import is_custom_key_env
+
+    return env_var in _BASE_ALLOWED or is_custom_key_env(env_var)
+
+
 def save_key(env_var: str, value: str) -> None:
     """Validate and store a key. Raises KeyStoreError (Chinese reason, no key)."""
-    if env_var not in ALLOWED_VARS:
+    if not allowed(env_var):
         raise KeyStoreError(MSG_BAD_VAR)
     _store.set(env_var, clean_key(value))
 
 
 def delete_key(env_var: str) -> None:
     """Remove a stored key. Raises KeyStoreError (Chinese reason only)."""
-    if env_var not in ALLOWED_VARS:
+    if not allowed(env_var):
         raise KeyStoreError(MSG_BAD_VAR)
     _store.delete(env_var)
 

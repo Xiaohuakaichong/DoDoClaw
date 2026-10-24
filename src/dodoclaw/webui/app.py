@@ -23,7 +23,7 @@ URGENT_KEYS = ("roshan", "aegis", "肉山", "盾")
 OV_POS = (24, 120)
 
 TTS_ZH = {"mock": "未配置", "edge": "Edge 免费声音", "stepfun_plan": "阶跃语音", "stepfun": "阶跃语音"}
-STT_ZH = {"mock": "关", "whisper": "本地识别", "stepfun_plan": "云端识别", "stepfun": "云端识别"}
+STT_ZH = {"mock": "关", "whisper": "本地识别", "stepfun_plan": "云端识别", "stepfun": "云端识别", "siliconflow": "云端识别"}
 GAME_STATE_ZH = {
     "DOTA_GAMERULES_STATE_INIT": "准备中",
     "DOTA_GAMERULES_STATE_WAIT_FOR_PLAYERS_TO_LOAD": "加载中",
@@ -327,10 +327,19 @@ class Bridge:
             logger.exception("save settings failed")
 
     def _key_status(self) -> dict[str, Any]:
+        from dodoclaw.webui import customs
         from dodoclaw.webui.keycheck import key_status
 
         c = self._svc.coach
-        return key_status(self._svc.provider_id, self._svc.provider_name, c.api_key or "", c.model or "")
+        cid = customs.active_custom_id() if self._svc.provider_id == "custom" else ""
+        return key_status(
+            self._svc.provider_id,
+            self._svc.provider_name,
+            c.api_key or "",
+            c.model or "",
+            base_url=c.base_url or "",
+            custom_id=cid,
+        )
 
     def _provider_label(self) -> str:
         from dodoclaw.webui import keycheck
@@ -358,13 +367,19 @@ class Bridge:
         key = self._key_status()
         mode = self.ui.get("stt_mode") or self._stt_default(key)
         if mode == "local":
+            # Missing component: UI greys the card (whisper_ready=False). Do not
+            # toast over the option cards (design settings-voice-stt-missing).
             if importlib.util.find_spec("faster_whisper") is None:
-                return "这个版本还没带本地识别组件，先选云端识别或打字提问"
+                return "缺少本地识别组件"
             backend = "whisper"
         else:
-            if not key["stepfun_key"]:
-                return "云端识别要阶跃的 Key：先把服务商切到阶跃并保存 Key，或在 .env 里加阶跃的 Key"
-            backend = key["provider"] if key["has_stt"] else "stepfun_plan"
+            # Prefer SiliconFlow SenseVoice when that key is available; else 阶跃.
+            if key.get("siliconflow_key"):
+                backend = "siliconflow"
+            elif key.get("stepfun_key"):
+                backend = key["provider"] if key["provider"] in ("stepfun_plan", "stepfun") else "stepfun_plan"
+            else:
+                return "云端识别需要硅基流动或阶跃的 Key：先保存 Key，或把教练切到其中一家"
         try:
             self._svc.reload_voice(stt_backend=backend)
         except Exception:
@@ -378,14 +393,28 @@ class Bridge:
         import importlib.util
 
         from dodoclaw.webui import tts_preview
+        from dodoclaw.webui import whisper_model
 
         svc = self._svc
+        ready = importlib.util.find_spec("faster_whisper") is not None
+        dl = whisper_model.status()
+        cloud_share = ""
+        if key.get("provider") == "siliconflow" and key.get("siliconflow_key"):
+            cloud_share = "与教练共用硅基流动 Key"
+        elif key.get("siliconflow_key"):
+            cloud_share = "使用已保存的硅基流动 Key"
+        elif key.get("stepfun_key"):
+            cloud_share = "与教练共用阶跃 Key" if key.get("provider") in ("stepfun", "stepfun_plan") else "使用已保存的阶跃 Key"
         return {
             "ask_on": bool(self.ui["voice_ask"]) and svc.stt_backend != "mock",
             "stt_mode": self.ui.get("stt_mode") or self._stt_default(key),
             "stt_default": self._stt_default(key),
             "stt_zh": STT_ZH.get(svc.stt_backend, "已配置"),
-            "whisper_ready": importlib.util.find_spec("faster_whisper") is not None,
+            "whisper_ready": ready,
+            "whisper_model_ready": bool(dl.get("ready")),
+            "whisper_download": dl,
+            "cloud_key_ready": bool(key.get("siliconflow_key") or key.get("stepfun_key")),
+            "cloud_share_zh": cloud_share,
             "tts_on": svc.tts_backend != "mock",
             "tts_zh": TTS_ZH.get(svc.tts_backend, "已配置"),
             "preview_voice_zh": _preview_voice_zh(getattr(svc, "tts_voice", "")),
@@ -418,6 +447,7 @@ class Bridge:
             "pending": sorted(settings_store.PENDING),
             "key": {**key, "last_test": self._last_test_view(), "switched_from": self._switched_view(key)},
             "providers": self.list_providers(),
+            "customs": self.list_customs(),
             "voice": self._voice_state(key),
             "adv": {
                 "online": age is not None and age < 35,
@@ -559,12 +589,17 @@ class Bridge:
             }
 
         pid = str(provider_id or "")
+        if pid == "__add_custom__":
+            return out(False, "")  # UI opens the form; nothing to save
+        if pid.startswith("custom:"):
+            return self.select_custom(pid.split(":", 1)[1])
         if pid not in keycheck.PICKER_IDS:
             return out(False, "没有这个服务商")
         prev = self._svc.provider_id
         if pid == prev:
             return out(True)
         try:
+            # Clear base_url override so the preset's fixed URL is used
             config.save_coach_choice(pid, get_provider(pid).default_model, "")
         except Exception:
             logger.exception("save coach provider failed")
@@ -588,14 +623,23 @@ class Bridge:
         if pid != self._svc.provider_id:
             # the dropdown changed while the key was being typed: never file it under another provider
             return self._key_fail("invalid", "服务商刚刚变了，请重新粘贴")
-        spec = get_provider(pid)
+        from dodoclaw.webui import customs
+
+        if pid == "custom":
+            cp = customs.get_custom(customs.active_custom_id())
+            if not cp:
+                return self._key_fail("invalid", "请先保存自定义接口地址和模型")
+            env_var, log_id = cp.key_env, f"custom:{cp.id}"
+        else:
+            spec = get_provider(pid)
+            env_var, log_id = spec.key_env, spec.id
         try:
-            keystore.save_key(spec.key_env, key if isinstance(key, str) else "")
+            keystore.save_key(env_var, key if isinstance(key, str) else "")
         except keystore.KeyStoreError as exc:
             return self._key_fail("store" if exc.reason_zh == keystore.MSG_WRITE else "invalid", exc.reason_zh)
         finally:
             key = ""  # drop our reference early
-        logger.info("saved key for %s", spec.id)
+        logger.info("saved key for %s", log_id)
         self.reload_env()
         self._switched_from = ""
         res = self.test_key()
@@ -620,14 +664,25 @@ class Bridge:
         from dodoclaw.webui import keycheck, keystore
 
         pid = str(provider_id or "")
-        if pid != self._svc.provider_id or pid not in keycheck.PICKER_IDS:
+        from dodoclaw.webui import customs
+
+        if pid != self._svc.provider_id:
             return {"ok": False, "msg": "服务商刚刚变了，请重新操作"}
-        spec = get_provider(pid)
+        if pid == "custom":
+            cp = customs.get_custom(customs.active_custom_id())
+            if not cp:
+                return {"ok": False, "msg": "没有这家自定义服务商"}
+            env_var, log_id = cp.key_env, f"custom:{cp.id}"
+        elif pid not in keycheck.PICKER_IDS:
+            return {"ok": False, "msg": "服务商刚刚变了，请重新操作"}
+        else:
+            spec = get_provider(pid)
+            env_var, log_id = spec.key_env, spec.id
         try:
-            keystore.delete_key(spec.key_env)
+            keystore.delete_key(env_var)
         except keystore.KeyStoreError as exc:
             return {"ok": False, "msg": exc.reason_zh}
-        logger.info("deleted key for %s", spec.id)
+        logger.info("deleted key for %s", log_id)
         self.reload_env()  # also clears last_test / coach error
         self._switched_from = ""
         msg = self._follow_provider_stt()
@@ -669,6 +724,187 @@ class Bridge:
         elif res.get("kind") != "no_key":
             self._coach_err = {"kind": res["kind"], "reason_zh": res["reason_zh"], "at": time.time()}
         return res
+
+
+    def list_customs(self) -> list[dict]:
+        """Saved custom OpenAI-compatible providers (booleans only)."""
+        from dodoclaw.webui import customs
+
+        cur = customs.active_custom_id() if self._svc.provider_id == "custom" else ""
+        return customs.public_list(current_id=cur)
+
+    def save_custom(
+        self,
+        name: str = "",
+        base_url: str = "",
+        model: str = "",
+        key: str = "",
+        custom_id: str = "",
+    ) -> dict:
+        """Create/update a custom provider, optionally save its Key, then test.
+
+        Returns {ok, kind, reason_zh, ms, model, configured, custom_id, field} —
+        never the key. ``field`` is url|model|key|"" for inline form errors.
+        """
+        from dodoclaw.webui import customs, keystore
+        from dodoclaw.webui.provider_validate import MSG_MODEL_EMPTY, MSG_URL_EMPTY
+
+        def fail(kind: str, reason_zh: str, field: str = "") -> dict:
+            return {
+                "ok": False,
+                "kind": kind,
+                "reason_zh": reason_zh,
+                "ms": None,
+                "model": model or "",
+                "configured": False,
+                "saved": False,
+                "custom_id": custom_id or "",
+                "field": field,
+                "msg": "",
+            }
+
+        try:
+            entry = customs.save_custom(
+                name=name or "",
+                base_url=base_url or "",
+                model=model or "",
+                custom_id=custom_id or "",
+                activate=True,
+            )
+        except ValueError as exc:
+            msg = str(exc)
+            field = "url"
+            if "模型" in msg:
+                field = "model"
+            elif "名称" in msg:
+                field = "name"
+            return fail("invalid", msg, field)
+        except Exception:
+            logger.exception("save custom failed")
+            return fail("store", "没能保存自定义服务商，详情见日志")
+
+        if isinstance(key, str) and key.strip():
+            try:
+                keystore.save_key(entry.key_env, key)
+            except keystore.KeyStoreError as exc:
+                field = "key"
+                return {**fail("invalid", exc.reason_zh, field), "custom_id": entry.id, "saved": False}
+            finally:
+                key = ""
+        self._switched_from = ""
+        self._reload_coach()
+        res = self.test_key()
+        # Map test failure kinds onto form fields (design D12 inline errors)
+        field = ""
+        if not res.get("ok"):
+            kind = res.get("kind") or ""
+            if kind in ("bad_address", "network"):
+                field = "url"
+                if kind == "bad_address":
+                    res = {**res, "reason_zh": "地址连不上 · 检查 URL 或网络后重试"}
+            elif kind == "auth":
+                field = "key"
+                res = {**res, "reason_zh": "Key 无效 · 可能复制少了一截，或在平台上被删了"}
+            elif kind == "not_found":
+                field = "model"
+                res = {**res, "reason_zh": "模型不存在 · 核对平台上的模型 ID"}
+        stt_msg = self._follow_provider_stt()
+        self._save_ui()
+        return {
+            "ok": bool(res.get("ok")),
+            "kind": res.get("kind", ""),
+            "reason_zh": res.get("reason_zh", ""),
+            "ms": res.get("ms"),
+            "model": entry.model,
+            "configured": bool((self._svc.coach.api_key or "").strip()),
+            "saved": True,
+            "custom_id": entry.id,
+            "field": field,
+            "msg": stt_msg,
+        }
+
+    def delete_custom(self, custom_id: str) -> dict:
+        """Delete one custom provider and its Key. Returns {ok, msg}."""
+        from dodoclaw.webui import customs, keystore
+
+        removed = customs.delete_custom(str(custom_id or ""))
+        if not removed:
+            return {"ok": False, "msg": customs.MSG_NOT_FOUND}
+        try:
+            if keystore.has_key(removed.key_env):
+                keystore.delete_key(removed.key_env)
+        except keystore.KeyStoreError as exc:
+            return {"ok": False, "msg": exc.reason_zh}
+        self._reload_coach()
+        msg = self._follow_provider_stt()
+        self._save_ui()
+        return {"ok": True, "msg": msg}
+
+    def select_custom(self, custom_id: str) -> dict:
+        """Make a saved custom provider the current coach."""
+        from dodoclaw.webui import customs
+
+        def out(ok: bool, msg: str = "") -> dict:
+            return {
+                "ok": ok,
+                "msg": msg,
+                "provider": self._svc.provider_id,
+                "model": self._svc.coach.model,
+                "key": {"configured": bool((self._svc.coach.api_key or "").strip())},
+            }
+
+        try:
+            customs.select_custom(str(custom_id or ""))
+        except ValueError as exc:
+            return out(False, str(exc))
+        except Exception:
+            logger.exception("select custom failed")
+            return out(False, "没能切换自定义服务商，详情见日志")
+        prev = self._svc.provider_id
+        self._switched_from = prev
+        self._reload_coach()
+        msg = self._follow_provider_stt()
+        self._save_ui()
+        return out(True, msg)
+
+    def save_coach_model(self, model: str = "") -> dict:
+        """Override the current preset's model (hand-editable combobox). Empty = default."""
+        from dodoclaw import config
+        from dodoclaw.providers import get_provider
+        from dodoclaw.webui.provider_validate import validate_model_id
+
+        pid = self._svc.provider_id
+        if pid == "custom":
+            return {"ok": False, "msg": "自定义服务商请用保存自定义接口"}
+        try:
+            mdl = validate_model_id(model) if (model or "").strip() else ""
+        except ValueError as exc:
+            return {"ok": False, "msg": str(exc)}
+        spec = get_provider(pid)
+        if not mdl or mdl == spec.default_model:
+            mdl = ""  # remove override
+        try:
+            config.save_coach_choice(pid, mdl, "")
+        except Exception:
+            logger.exception("save coach model failed")
+            return {"ok": False, "msg": "没能保存模型，详情见日志"}
+        self._reload_coach()
+        return {"ok": True, "msg": "", "model": self._svc.coach.model, "default_model": spec.default_model}
+
+    def whisper_status(self) -> dict:
+        from dodoclaw.webui import whisper_model
+
+        return whisper_model.status()
+
+    def start_whisper_download(self) -> dict:
+        from dodoclaw.webui import whisper_model
+
+        return whisper_model.start_download()
+
+    def cancel_whisper_download(self) -> dict:
+        from dodoclaw.webui import whisper_model
+
+        return whisper_model.cancel_download()
 
     def open_key_page(self, provider_id: str = "", purpose: str = "key") -> bool:
         """去申请 (key page) / 去充值 · 去续订 (purpose="topup"). https only."""

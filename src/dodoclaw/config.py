@@ -154,6 +154,27 @@ class Settings(BaseSettings):
 
         base_hint = str(yaml_coach.get("base_url") or "")
         model_hint = str(yaml_coach.get("model") or "")
+
+        # Custom OpenAI-compatible entry (PRD D12): URL/model from the saved list;
+        # key from CUSTOM_<id>_API_KEY only (never another vendor's key).
+        if provider_id.strip().lower() == "custom":
+            from dodoclaw.webui import customs
+
+            cid = str(yaml_coach.get("custom_id") or "").strip()
+            cp = customs.get_custom(cid) or (customs.list_customs()[:1] or [None])[0]
+            if cp is not None:
+                import os
+
+                key = (os.environ.get(cp.key_env) or "").strip()
+                if not key:
+                    from dodoclaw.webui import keystore
+
+                    key = (keystore.store().get(cp.key_env) or "").strip()
+                return "custom", cp.display_name, key, cp.base_url, cp.model
+            # orphaned custom_id → fall through to default preset
+            provider_id = DEFAULT_PROVIDER_ID
+            base_hint, model_hint = "", ""
+
         spec = get_provider(provider_id)
         # Provider's own key (Settings fields include the .env file), then the
         # generic LLM_API_KEY. Never another vendor's key (PRD D10 picker).

@@ -19,15 +19,18 @@ logger = logging.getLogger(__name__)
 
 KEY_ENVS: tuple[str, ...] = tuple(sorted({p.key_env for p in PROVIDERS.values()} | {"LLM_API_KEY"}))
 # Coach providers that also offer cloud speech recognition with the same key
-STT_PROVIDERS = {"stepfun_plan", "stepfun"}
+STT_PROVIDERS = {"stepfun_plan", "stepfun", "siliconflow"}
 
 
 # 服务商 dropdown (PRD D10, design/v2 README): exactly these five, in this order.
 # (id, name, tag in the field, tag in the menu, hint). Other presets (通义、Kimi、
 # 自定义…) are not offered here; if settings.yaml names one, it is still shown
 # as the current provider and works as before.
+# Order: DeepSeek → 硅基流动 → 阶跃… → xAI → OpenAI. 「＋ 自定义」 is appended in
+# list_providers (not a fixed ProviderSpec row).
 PICKER: tuple[tuple[str, str, str, str, str], ...] = (
     ("deepseek", "DeepSeek", "推荐", "默认 · 推荐", ""),
+    ("siliconflow", "硅基流动", "OpenAI 兼容", "OpenAI 兼容", "国内直连"),
     ("stepfun_plan", "阶跃 Step Plan", "订阅制", "订阅制", "和“阶跃按量”共用一个阶跃 Key"),
     ("stepfun", "阶跃按量", "按量计费", "按量计费", "自带云端语音识别"),
     ("xai", "xAI (Grok)", "国内需代理", "国内需代理", "SuperGrok 会员不含 API 额度"),
@@ -36,7 +39,15 @@ PICKER: tuple[tuple[str, str, str, str, str], ...] = (
 PICKER_IDS: tuple[str, ...] = tuple(x[0] for x in PICKER)
 _BY_ID = {x[0]: x for x in PICKER}
 # short names used inside sentences (“去申请 阶跃 Key”, “切回 DeepSeek”)
-_SHORT = {"deepseek": "DeepSeek", "stepfun_plan": "阶跃", "stepfun": "阶跃", "xai": "xAI", "openai": "OpenAI"}
+_SHORT = {
+    "deepseek": "DeepSeek",
+    "siliconflow": "硅基流动",
+    "stepfun_plan": "阶跃",
+    "stepfun": "阶跃",
+    "xai": "xAI",
+    "openai": "OpenAI",
+    "custom": "自定义",
+}
 
 
 def provider_label(provider_id: str) -> str:
@@ -60,25 +71,55 @@ def shares_key_with(provider_id: str) -> list[str]:
 
 
 def list_providers(current: str = "", current_configured: bool = False) -> list[dict[str, Any]]:
-    """The five dropdown rows. ``configured`` is a boolean only."""
-    from dodoclaw.webui import keystore
+    """Preset dropdown rows + a trailing 「＋ 自定义」 action. Booleans only."""
+    from dodoclaw.webui import customs, keystore
 
-    cur = get_provider(current).id if current else ""
+    cur_raw = (current or "").strip().lower()
+    cur = get_provider(cur_raw).id if cur_raw and cur_raw != "custom" else cur_raw
+    active_custom = customs.active_custom_id() if cur == "custom" else ""
     out = []
     for pid, name, _tag, menu_tag, hint in PICKER:
         spec = get_provider(pid)
         configured = keystore.has_key(spec.key_env) or (pid == cur and current_configured)
+        # Menu subtitle: host · 已配置/未配置 · hint (design D12)
+        host = ""
+        try:
+            from urllib.parse import urlparse
+            host = (urlparse(spec.base_url).hostname or "") 
+        except Exception:
+            host = ""
+        ds_bits = [b for b in (host, ("已配置" if configured else "未配置"), hint) if b]
         out.append({
             "id": pid,
             "name": name,
             "tag": menu_tag,
             "model": spec.default_model,
+            "models": spec.model_choices(),
+            "base_url": spec.base_url,
             "configured": bool(configured),
             "shares_key_with": shares_key_with(pid),
             "hint": hint,
+            "subtitle": " · ".join(ds_bits),
             "apply_url": spec.apply_url(),
             "current": pid == cur,
+            "kind": "preset",
         })
+    # Trailing action — not a real provider id for set_provider
+    out.append({
+        "id": "__add_custom__",
+        "name": "＋ 自定义（OpenAI 兼容）",
+        "tag": "",
+        "model": "",
+        "models": [],
+        "base_url": "",
+        "configured": False,
+        "shares_key_with": [],
+        "hint": "填接口地址和模型 ID，可保存多家",
+        "subtitle": "填接口地址和模型 ID，可保存多家",
+        "apply_url": "",
+        "current": False,
+        "kind": "add_custom",
+    })
     return out
 
 
@@ -90,8 +131,8 @@ _GUIDE: dict[str, tuple[str, str, str]] = {
     "balance": ("去平台充值后点“重新测试”，不用重填。", "去充值", "topup"),
     "rate_limit": ("过一分钟再点“重新测试”。", "", ""),
     "network": ("xAI / OpenAI 在国内要开代理；开好后点“重新测试”。", "", ""),
-    # 高级 → 接口与模型 is not built yet: point at the settings file (in words, no internal names)
-    "not_found": ("模型名或接口地址不对。把服务商重新选一次就恢复默认；要用自定义模型，请在程序目录 config 文件夹里的设置文件中修改，改完点“重新测试”。", "", ""),
+    "bad_address": ("连不上这个接口地址，检查一下地址和网络后点“重新测试”。", "", ""),
+    "not_found": ("模型名或接口地址不对。把服务商重新选一次就恢复默认；自定义接口请在上方改接口地址和模型 ID，改完点“重新测试”。", "", ""),
     "unknown": ("点“重新测试”；还不行就把日志发给开发者。", "打开日志", "log"),
     "http": ("点“重新测试”；还不行就把日志发给开发者。", "打开日志", "log"),
 }
@@ -135,24 +176,54 @@ def reload_env_file(path: Path, previously_from_file: set[str]) -> set[str]:
     return names
 
 
-def key_status(provider_id: str, provider_name: str, api_key: str, model: str = "") -> dict[str, Any]:
+def key_status(
+    provider_id: str,
+    provider_name: str,
+    api_key: str,
+    model: str = "",
+    *,
+    base_url: str = "",
+    custom_id: str = "",
+) -> dict[str, Any]:
     """Booleans and names only. No hint about where the key is stored (README D10)."""
-    spec = get_provider(provider_id)
+    from dodoclaw.webui import customs
+
+    raw = (provider_id or "").strip().lower()
+    is_custom = raw == "custom"
+    spec = get_provider("custom" if is_custom else provider_id)
     flags = env_flags()
     configured = bool((api_key or "").strip())
+    cp = customs.get_custom(custom_id) if is_custom else None
+    name = (
+        (cp.display_name if cp else "自定义接口")
+        if is_custom
+        else (provider_label(spec.id) if spec.id in _BY_ID else (provider_name or spec.name))
+    )
+    key_env = cp.key_env if cp else spec.key_env
+    sf_key = flags.get("SILICONFLOW_API_KEY", False) or (
+        spec.id == "siliconflow" and configured
+    )
+    step_key = flags.get("STEPFUN_API_KEY", False) or (
+        spec.id in {"stepfun_plan", "stepfun"} and configured
+    )
     return {
         "configured": configured,
-        "provider": spec.id,
-        "provider_name": provider_label(spec.id) if spec.id in _BY_ID else (provider_name or spec.name),
-        "provider_short": provider_short(spec.id),
-        "provider_tag": provider_tag(spec.id),
-        "in_picker": spec.id in _BY_ID,
-        "model": model or spec.default_model,
-        "key_env": spec.key_env,
-        "apply": bool(spec.apply_url()),
-        "has_stt": spec.id in STT_PROVIDERS,
-        "stepfun_key": flags.get("STEPFUN_API_KEY", False)
-        or (spec.id in STT_PROVIDERS and bool((api_key or "").strip())),
+        "provider": "custom" if is_custom else spec.id,
+        "provider_name": name,
+        "provider_short": provider_short("custom" if is_custom else spec.id),
+        "provider_tag": "OpenAI 兼容" if is_custom else provider_tag(spec.id),
+        "in_picker": (not is_custom) and spec.id in _BY_ID,
+        "model": (cp.model if cp else "") or model or spec.default_model,
+        "base_url": (cp.base_url if cp else "") or base_url or spec.base_url,
+        "models": [] if is_custom else spec.model_choices(),
+        "default_model": spec.default_model,
+        "key_env": key_env,
+        "apply": bool(spec.apply_url()) if not is_custom else False,
+        "has_stt": (spec.id in STT_PROVIDERS) or sf_key,
+        "stepfun_key": step_key,
+        "siliconflow_key": bool(sf_key),
+        "custom_id": cp.id if cp else "",
+        "is_custom": is_custom,
     }
 
 
