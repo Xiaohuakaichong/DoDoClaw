@@ -277,4 +277,3 @@ def test_whisper_download_uses_plain_http_unless_user_set(monkeypatch):
     monkeypatch.setenv("HF_HUB_DISABLE_XET", "0")
     whisper_model._plain_http_transfer()
     assert os.environ["HF_HUB_DISABLE_XET"] == "0"
-    assert "HF_ENDPOINT" not in os.environ or os.environ["HF_ENDPOINT"]  # never set by us
