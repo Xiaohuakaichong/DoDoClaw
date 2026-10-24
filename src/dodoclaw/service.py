@@ -194,30 +194,31 @@ class DoDoClawService:
         self._init_draft_advisor(meta_cfg)
 
     def _audio_credentials(self, backend_id: str) -> tuple[str, str]:
-        """Resolve (api_key, base_url) for a StepFun-style audio backend."""
+        """Resolve (api_key, base_url) for a cloud audio backend (阶跃 / 硅基流动)."""
         spec_stt = get_stt_backend(backend_id)
         spec_tts = get_tts_backend(backend_id)
-        # prefer matching llm provider keys
         linked = (
             getattr(spec_stt, "key_from_llm_provider", "")
             or getattr(spec_tts, "key_from_llm_provider", "")
             or backend_id
         )
-        if backend_id in {"stepfun_plan", "stepfun"}:
+        if backend_id in {"stepfun_plan", "stepfun", "siliconflow"}:
             linked = backend_id
         _spec, key, url, _model = resolve_llm_runtime(
-            linked if linked in {"stepfun_plan", "stepfun"} else self.provider_id,
-            api_key=self.settings.llm_api_key or self.settings.stepfun_api_key,
+            linked if linked in {"stepfun_plan", "stepfun", "siliconflow"} else self.provider_id,
+            api_key="",
             base_url="",
             model="",
         )
-        # force audio base from audio backend when stepfun*
         if backend_id == "stepfun_plan":
             url = get_stt_backend("stepfun_plan").base_url or url
             key = key or self.settings.stepfun_api_key or self.settings.llm_api_key
         elif backend_id == "stepfun":
             url = get_stt_backend("stepfun").base_url or url
             key = key or self.settings.stepfun_api_key or self.settings.llm_api_key
+        elif backend_id == "siliconflow":
+            url = get_stt_backend("siliconflow").base_url or url
+            key = key or self.settings.siliconflow_api_key or self.settings.llm_api_key
         return key, url
 
     def _build_voice_stack(self):

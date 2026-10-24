@@ -12,6 +12,11 @@ if ($LASTEXITCODE -ne 0) { throw "pip install failed" }
 if ($LASTEXITCODE -ne 0) {
     throw "edge_tts / aiohttp / certifi cannot be imported in .venv. Run: .venv\Scripts\python.exe -m pip install `"edge-tts>=6.1.12`""
 }
+# Fail fast: local Whisper must ship in this build (PRD: bundle STT this version)
+& $Py -c "import faster_whisper, ctranslate2, tokenizers, sounddevice, numpy"
+if ($LASTEXITCODE -ne 0) {
+    throw "faster-whisper stack cannot be imported in .venv. Run: .venv\Scripts\python.exe -m pip install `".[webui]`""
+}
 $Dist = Join-Path $Root "dist\DoDoClaw-preview"
 # Clear contents only (folder itself may be open in Explorer)
 if (Test-Path $Dist) { Get-ChildItem $Dist -Force | Remove-Item -Recurse -Force }

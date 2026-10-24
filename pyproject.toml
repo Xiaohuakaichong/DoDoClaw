@@ -38,6 +38,10 @@ webui = [
     "pywebview>=5.0",
     # 试听 / default free voice: must be in the build venv or the exe ships without it
     "edge-tts>=6.1.12",
+    # Local Whisper STT (bundled into the exe; model weights download on first use)
+    "faster-whisper>=1.0.3",
+    "sounddevice>=0.5.0",
+    "numpy>=1.26",
 ]
 # Desktop packaging extras
 app = [

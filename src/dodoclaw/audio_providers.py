@@ -54,6 +54,17 @@ STT_BACKENDS: dict[str, AudioBackendSpec] = {
         base_url="https://api.stepfun.com/v1",
         note="按量计费开放平台 /v1",
     ),
+    "siliconflow": AudioBackendSpec(
+        id="siliconflow",
+        name="硅基流动 SenseVoice",
+        kind="stt",
+        default_model="FunAudioLLM/SenseVoiceSmall",
+        models=("FunAudioLLM/SenseVoiceSmall",),
+        key_from_llm_provider="siliconflow",
+        base_url="https://api.siliconflow.cn/v1",
+        # Docs: POST /audio/transcriptions, file ≤50MB / ≤1h; no prompt field
+        note="OpenAI 兼容 · FunAudioLLM/SenseVoiceSmall",
+    ),
 }
 
 TTS_BACKENDS: dict[str, AudioBackendSpec] = {

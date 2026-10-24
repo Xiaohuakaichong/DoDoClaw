@@ -40,6 +40,19 @@ for pkg in ("edge_tts", "aiohttp"):
 hiddenimports += ["certifi"]
 datas += collect_data_files("certifi")
 
+# Local Whisper (faster-whisper + ctranslate2 DLLs + tokenizers + onnxruntime VAD + av)
+# Model weights are NOT bundled — downloaded on first use into the user cache.
+for pkg in ("faster_whisper", "ctranslate2", "tokenizers", "onnxruntime", "av", "huggingface_hub", "sounddevice"):
+    try:
+        d, b, h = collect_all(pkg)
+        datas += d
+        binaries += b
+        hiddenimports += h
+    except Exception:
+        hiddenimports += collect_submodules(pkg)
+hiddenimports += collect_submodules("faster_whisper")
+hiddenimports += ["numpy", "sounddevice"]
+
 a = Analysis(
     [str(ROOT / "packaging" / "entry_webui.py")],
     pathex=[str(ROOT / "src")],

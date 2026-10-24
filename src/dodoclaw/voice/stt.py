@@ -29,12 +29,38 @@ class MockSTT(BaseSTT):
             return ""
 
 
+def dota_initial_prompt(max_chars: int = 800) -> str:
+    """Hero / item alias string for Whisper initial_prompt (Dota顾问)."""
+    try:
+        import json
+        from pathlib import Path
+
+        path = Path(__file__).resolve().parents[1] / "data" / "hero_aliases.json"
+        data = json.loads(path.read_text(encoding="utf-8"))
+        heroes = data.get("heroes") or []
+        parts: list[str] = ["刀塔，英雄："]
+        for h in heroes:
+            names = [h.get("name_zh") or ""] + list(h.get("aliases") or [])
+            names = [n for n in names if n]
+            if names:
+                parts.append("/".join(names[:4]))
+        prompt = "，".join(parts)
+        return prompt[:max_chars]
+    except Exception:
+        logger.exception("build dota initial_prompt failed")
+        return "刀塔 英雄 技能 出装"
+
+
 class WhisperSTT(BaseSTT):
-    """Local faster-whisper STT (optional dependency)."""
+    """Local faster-whisper STT (optional dependency). CPU int8.
+
+    Model weights download on first use (see webui.whisper_model); they are not
+    bundled in the exe.
+    """
 
     def __init__(self, model_size: str = "base", sample_rate: int = 16000) -> None:
         self.sample_rate = sample_rate
-        self.model_size = model_size
+        self.model_size = model_size or "base"
         try:
             from faster_whisper import WhisperModel  # type: ignore
             import sounddevice as sd
@@ -46,10 +72,30 @@ class WhisperSTT(BaseSTT):
 
         self._sd = sd
         self._np = np
-        logger.info("Loading Whisper model: %s", model_size)
-        self._model = WhisperModel(model_size, device="cpu", compute_type="int8")
+        self._WhisperModel = WhisperModel
+        self._model = None
+        self._initial_prompt = dota_initial_prompt()
+
+    def _ensure_model(self):
+        if self._model is not None:
+            return self._model
+        from dodoclaw.webui import whisper_model
+
+        if not whisper_model.ensure_ready(timeout=600.0):
+            raise RuntimeError(whisper_model.status().get("error_zh") or "模型未就绪")
+        # Cache dir so faster-whisper / CTranslate2 find the snapshot
+        import os
+
+        os.environ.setdefault("HF_HOME", str(whisper_model.model_dir()))
+        logger.info("Loading Whisper model: %s (cpu int8)", self.model_size)
+        self._model = self._WhisperModel(
+            self.model_size, device="cpu", compute_type="int8",
+            download_root=str(whisper_model.model_dir()),
+        )
+        return self._model
 
     def listen_once(self, seconds: float = 5.0) -> str:
+        model = self._ensure_model()
         logger.info("Recording %.1fs...", seconds)
         audio = self._sd.rec(
             int(seconds * self.sample_rate),
@@ -59,10 +105,26 @@ class WhisperSTT(BaseSTT):
         )
         self._sd.wait()
         samples = audio[:, 0]
-        segments, _info = self._model.transcribe(samples, language="zh", beam_size=1)
+        segments, _info = model.transcribe(
+            samples,
+            language="zh",
+            beam_size=1,
+            initial_prompt=self._initial_prompt,
+        )
         text = "".join(seg.text for seg in segments).strip()
         logger.info("STT: %s", text)
         return text
+
+    def transcribe_array(self, samples, *, language: str = "zh") -> str:
+        """Transcribe a float32 mono array (for offline verification)."""
+        model = self._ensure_model()
+        segments, _info = model.transcribe(
+            samples,
+            language=language,
+            beam_size=1,
+            initial_prompt=self._initial_prompt,
+        )
+        return "".join(seg.text for seg in segments).strip()
 
 
 class StepFunSTT(BaseSTT):
@@ -190,6 +252,48 @@ class StepFunSTT(BaseSTT):
         return final_text.strip()
 
 
+class SiliconFlowSTT(BaseSTT):
+    """SiliconFlow OpenAI-compatible POST /v1/audio/transcriptions.
+
+    Model: FunAudioLLM/SenseVoiceSmall. Docs list only ``file`` + ``model`` —
+    no prompt / hotwords field, so aliases are not sent.
+    Limit: ≤50MB / ≤1 hour.
+    """
+
+    def __init__(
+        self,
+        api_key: str,
+        base_url: str = "https://api.siliconflow.cn/v1",
+        model: str = "FunAudioLLM/SenseVoiceSmall",
+        sample_rate: int = 16000,
+    ) -> None:
+        if not api_key:
+            raise RuntimeError("硅基流动语音识别需要 API Key（SILICONFLOW_API_KEY）")
+        self.api_key = api_key
+        self.base_url = base_url.rstrip("/")
+        self.model = model or "FunAudioLLM/SenseVoiceSmall"
+        self.sample_rate = sample_rate
+
+    def listen_once(self, seconds: float = 5.0) -> str:
+        from dodoclaw.voice.audio_io import record_wav
+
+        wav_path = record_wav(seconds=seconds, sample_rate=self.sample_rate)
+        try:
+            return self._transcribe_file(wav_path)
+        finally:
+            wav_path.unlink(missing_ok=True)
+
+    def _transcribe_file(self, wav_path) -> str:
+        from openai import OpenAI
+
+        client = OpenAI(api_key=self.api_key, base_url=self.base_url, timeout=60.0, max_retries=0)
+        with open(wav_path, "rb") as f:
+            result = client.audio.transcriptions.create(model=self.model, file=f)
+        if isinstance(result, str):
+            return result.strip()
+        return (getattr(result, "text", None) or str(result) or "").strip()
+
+
 def create_stt(
     backend: str = "mock",
     *,
@@ -208,6 +312,13 @@ def create_stt(
         return WhisperSTT(model_size=model or spec.default_model or "base", sample_rate=sample_rate)
     if bid in {"stepfun_plan", "stepfun"}:
         return StepFunSTT(
+            api_key=api_key,
+            base_url=base_url or spec.base_url,
+            model=model or spec.default_model,
+            sample_rate=sample_rate,
+        )
+    if bid == "siliconflow":
+        return SiliconFlowSTT(
             api_key=api_key,
             base_url=base_url or spec.base_url,
             model=model or spec.default_model,
