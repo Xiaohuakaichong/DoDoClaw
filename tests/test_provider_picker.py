@@ -659,8 +659,6 @@ def test_key_fill_saves_without_switching_coach(world, monkeypatch):
 def test_key_fill_failed_test_does_not_save(world, monkeypatch, case):
     import httpx
 
-    from dodoclaw.coach import errors
-
     def handler(req):
         if case in ("401", "403"):
             return httpx.Response(int(case), json={"error": "invalid api key"})
@@ -674,11 +672,15 @@ def test_key_fill_failed_test_does_not_save(world, monkeypatch, case):
     b.begin_key_fill("siliconflow", "stt")
     out = b.save_key("siliconflow", "sk-sf-bad-KEY-zzzz")
     assert out["ok"] is False and out["saved"] is False and out["fill_only"] is True
-    want = {"401": ("auth", errors.AUTH), "403": ("auth", errors.AUTH),
-            "timeout": ("network", errors.NETWORK), "refused": ("bad_address", errors.BAD_ADDRESS)}[case]
+    AUTH_ZH = "Key 无效或已过期，没有保存，检查后重新粘贴"
+    NET_ZH = "连不上硅基流动，检查网络后再试，Key 没有保存"
+    want = {"401": ("auth", AUTH_ZH), "403": ("auth", AUTH_ZH),
+            "timeout": ("network", NET_ZH), "refused": ("bad_address", NET_ZH)}[case]
     assert (out["kind"], out["reason_zh"]) == want
+    assert "重新粘贴" not in out["reason_zh"] or case in ("401", "403")
     assert "back" not in out  # stays on the coach card
-    assert b._key_fill == {"provider": "siliconflow", "purpose": "stt"}  # still 只填 Key
+    assert b._key_fill["provider"] == "siliconflow" and b._key_fill["purpose"] == "stt"  # still 只填 Key
+    assert b._key_fill.get("name") == "硅基流动"
     assert _sf_flag() is False  # 失败不保存
     assert svc.provider_id == "stepfun_plan"
     assert "sk-sf-bad" not in repr(out)
@@ -692,8 +694,8 @@ def test_cloud_preview_needs_key_then_plays(world, monkeypatch):
     b.reload_env()
     b.save_settings({"tts_backend": "siliconflow"})
     v = b.settings_state()["voice"]
-    assert v["preview_ok"] is False and v["preview_off_zh"] == A.MSG_PREVIEW_NEED_KEY
-    assert b.preview_tts() == {"ok": False, "msg": "先填确认 Key 后才能试听"}
+    assert v["preview_ok"] is False and v["preview_off_zh"] == A.MSG_PREVIEW_NEED_KEY == "先填 Key"
+    assert b.preview_tts() == {"ok": False, "msg": "先填 Key"}
     # with a Key: synthesize in the cloud (mocked) and play
     import httpx
     _mock_models(monkeypatch, lambda req: httpx.Response(200, json={"data": []}))

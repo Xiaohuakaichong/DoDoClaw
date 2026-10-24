@@ -550,16 +550,14 @@ async function runTest() {
 
 // 保存并测试: save first, then test (a failed test keeps the key). The input is cleared
 // as soon as save_key returns, whatever the result.
-// 只填 Key：测试失败的红字放在 Key 输入框下方（Key 没保存，仍停在只填 Key 模式）
+// 只填 Key：失败红字贴在 Key 输入框正下方、左对齐（文案由后端一次写全，不重复）
 function renderFillErr() {
-  const row = $('#fill-err-row'); if (!row) return;
+  const el = $('#fill-err'); if (!el) return;
   const fill = S && S.voice && S.voice.key_fill;
   const on = !!(fill && saveErr);
-  row.hidden = !on;
-  if (!on) { $('#fill-err').innerHTML = ''; return; }
-  const head = saveKind === 'auth' ? 'Key 无效'
-    : (saveKind === 'network' || saveKind === 'bad_address') ? '网络不通 / 接口地址连不上' : '没能验证 Key';
-  $('#fill-err').innerHTML = `<div class="ferr on"><b>${esc(head)}</b>：${esc(saveErr)}。Key 没有保存，检查后重新粘贴。</div>`;
+  el.hidden = !on;
+  el.classList.toggle('on', on);
+  el.textContent = on ? saveErr : '';
 }
 
 async function saveKey() {
@@ -575,7 +573,7 @@ async function saveKey() {
   catch (e) { r = e && e.timeout ? { timeout: true } : { ok: false, kind: 'store', reason_zh: '没能保存，详情见日志', saved: false }; }
   inp.value = ''; setEye(false);
   busy = null;
-  if (r.timeout && fill) { saveErr = '等了 20 秒还没测完，检查网络后再试'; saveKind = 'network'; }
+  if (r.timeout && fill) { const n = (S.voice.key_fill && S.voice.key_fill.name) || '这家服务'; saveErr = `连不上${n}，检查网络后再试，Key 没有保存`; saveKind = 'network'; }
   else if (r.timeout) localTest = { ...TIMEOUT };
   else if (r.saved === false) { saveErr = r.reason_zh || '没能保存，详情见日志'; saveKind = r.kind || ''; }
   else { changing = false; flashSaved(); if (r.msg && !r.fill_only) toast(r.msg, { icon: 'alert' }); }
@@ -813,10 +811,11 @@ onReady(async () => {
     const b = $('#btn-preview'); if (b.classList.contains('busy')) return;
     b.classList.add('busy');
     const cloud = S.voice && S.voice.tts_backend !== 'edge';
-    if (cloud) toast('正在合成试听，最多等 20 秒…', { icon: 'info' });
+    const prevHtml = b.innerHTML;
+    if (cloud) b.innerHTML = '<svg class="ico" style="width:14px;height:14px"><use href="#vol"/></svg>合成中…';
     try { const r = await api().preview_tts(); if (!r || !r.ok) toast((r && r.msg) || '试听失败，详情见日志', { icon: 'alert' }); }
     catch (e) { toast('试听失败，详情见日志', { icon: 'alert' }); }
-    finally { b.classList.remove('busy'); }
+    finally { b.classList.remove('busy'); if (cloud) b.innerHTML = prevHtml; }
   };
   $('#sw-ask').onclick = async () => {
     if ($('#sw-ask').classList.contains('dis')) {
@@ -851,7 +850,6 @@ onReady(async () => {
     c.classList.remove('flash'); void c.offsetWidth; c.classList.add('flash');
     setTimeout(() => { try { $('#key-in').focus(); } catch (_) {} }, 50);
   });
-  $('#btn-hotkey').onclick = () => toast('全局快捷键下一版提供，现在先点麦克风提问', { icon: 'info' });
   $('#btn-fill-apply').onclick = async () => {
     const f = S.voice && S.voice.key_fill; if (!f) return;
     if (!(await api().open_key_page(f.provider, 'key'))) toast('没能打开浏览器，详情见日志', { icon: 'alert' });

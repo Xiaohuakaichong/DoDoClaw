@@ -89,17 +89,16 @@
 .envl{display:flex;align-items:center;gap:10px;font-size:12.5px;white-space:nowrap}.envl+.envl{margin-top:8px}
 /* D13 播报缺组件：由 JS 切 .tts-ok / .tts-miss（edge 缺包时） */
 html:not(.st-tts-missing) .tts-miss,html.st-tts-missing .tts-ok{display:none!important}
-#btn-preview.off{opacity:.5;cursor:not-allowed} /* 仍可悬停/点击：给出「先填确认 Key 后才能试听」 */
+#btn-preview.off{opacity:.5;cursor:not-allowed} /* 仍可悬停/点击：给出「先填 Key」 */
 [disabled].btn{opacity:.5;cursor:not-allowed;pointer-events:none}
 .savedflash{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:700;color:var(--ok);white-space:nowrap}
 .savedflash .ico{width:14px;height:14px;stroke-width:2.6}
 .vcard.jb{border-color:rgba(63,220,151,.45);box-shadow:0 0 0 3px rgba(63,220,151,.12)}
 #c-coach.fill-key .fv-note{display:inline!important}
 #c-coach.fill-key #btn-fill-apply{display:inline-flex!important;align-items:center;gap:3px}
-#fill-err-row[hidden]{display:none!important}
-#fill-err .ferr{color:var(--danger);font-size:12.5px;line-height:1.5}
-#fill-err .ferr b{font-weight:700}
-#btn-hotkey.dis-soft{opacity:.55;cursor:not-allowed}
+#c-preset-key .row .v{flex-wrap:wrap}
+#fill-err{display:none;width:100%;flex:0 0 100%;margin-top:2px;padding-left:2px;text-align:left;color:var(--danger);font-size:12.5px;line-height:1.5}
+#fill-err.on{display:block}
 /* 可复制路径 */
 .mono.copyable{cursor:copy}.mono.copyable:hover{border-color:var(--line-2);color:var(--text)}
 .saved{opacity:0;transition:opacity var(--dur-2)}.saved.on{opacity:1}
@@ -241,9 +240,8 @@ a.link{text-decoration:none}
      <span class="btn txt-danger sm ks ks-del" id="btn-del" title="把这一家的 Key 从这台电脑上删掉">删除 Key</span>
      <span class="btn ghost sm ks ks-set" id="btn-test"><svg class="ico" style="width:14px;height:14px"><use href="#refresh"/></svg>重新测试</span>
      <span class="btn ghost sm ks ks-set" id="btn-change">更换 Key</span>
+     <div class="ferr" id="fill-err" hidden></div>
     </div></div>
-    <!-- 只填 Key：测试失败的红字，紧贴在 Key 输入框下方 -->
-    <div class="row fv-err" id="fill-err-row" hidden><span class="k"></span><div class="v" id="fill-err"></div></div>
     <!-- 说明 / 测试结果 -->
     <div class="row" id="res-row"><span class="k" id="res-k">说明</span><div class="v" id="key-res"></div></div>
     <!-- 备用入口：手动编辑 .env（默认折叠） -->
@@ -306,7 +304,6 @@ a.link{text-decoration:none}
     </div>
     <div class="row" id="stt-model-row"><span class="k">识别模型</span><div class="v" id="stt-model-v"></div></div>
     <div class="row" id="stt-key-row" hidden><span class="k">Key</span><div class="v" id="stt-key-v"></div></div>
-    <div class="row" id="hotkey-row"><span class="k">按住说话</span><div class="v"><div class="field dis-soft" id="btn-hotkey" role="button" aria-disabled="true" title="全局快捷键下一版提供" style="width:200px;height:32px"><span class="ph">未设置</span><span class="pill mute tiny" style="margin-left:auto">下一版</span></div><span class="hint nowrap">全局快捷键下一版提供，现在先点麦克风提问</span></div></div>
    </div>
   </div>
 

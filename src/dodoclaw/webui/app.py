@@ -56,7 +56,7 @@ VOICE_ZH = {
     "zh-CN-YunxiNeural": "云希（男声）",
     "zh-CN-YunyangNeural": "云扬（男声）",
 }
-MSG_PREVIEW_NEED_KEY = "先填确认 Key 后才能试听"
+MSG_PREVIEW_NEED_KEY = "先填 Key"
 
 
 def _ui_backend(bid: str) -> str:
@@ -210,7 +210,7 @@ class Bridge:
         self.ui = settings_store.load(self._ui_path)
         self.reduce_motion = bool(self.ui["reduce_motion"])
         self._pref("tts_voice")  # remember the configured models / voice before any switch
-        self._key_fill: dict[str, str] | None = None  # {provider, purpose} while 去填 Key
+        self._key_fill: dict[str, str] | None = None  # {provider, purpose, name} while 去填 Key
         # PM D13: 识别 switch defaults OFF (no mic / no 150MB download on first open)
         if self.ui["voice_ask"] is None:
             self.ui["voice_ask"] = False
@@ -948,8 +948,15 @@ class Bridge:
             chk = voice_keycheck.verify(pid, cleaned)
             cleaned = ""
             if not chk.get("ok"):
-                return {**self._key_fail(chk.get("kind") or "unknown", chk.get("reason_zh") or "验证 Key 失败"),
-                        "fill_only": True}
+                kind = chk.get("kind") or "unknown"
+                if kind == "auth":
+                    reason = "Key 无效或已过期，没有保存，检查后重新粘贴"
+                elif kind in ("network", "bad_address"):
+                    zh = VOICE_VENDOR[pid][0]  # 硅基流动 / 阶跃
+                    reason = f"连不上{zh}，检查网络后再试，Key 没有保存"
+                else:
+                    reason = chk.get("reason_zh") or "验证 Key 失败"
+                return {**self._key_fail(kind, reason), "fill_only": True}
         try:
             keystore.save_key(env_var, key if isinstance(key, str) else "")
         except keystore.KeyStoreError as exc:
@@ -1262,7 +1269,7 @@ class Bridge:
             return {"ok": False, "msg": "没有这家服务商"}
         if purpose not in ("stt", "tts"):
             purpose = "stt"
-        self._key_fill = {"provider": pid, "purpose": purpose}
+        self._key_fill = {"provider": pid, "purpose": purpose, "name": VOICE_VENDOR[pid][0]}
         return {
             "ok": True,
             "msg": "",
