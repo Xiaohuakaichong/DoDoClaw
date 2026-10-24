@@ -223,6 +223,7 @@ html,body{height:100%;background:var(--bg-0);overflow:hidden;user-select:none}
 #c-coach.fill-key .ks-del,
 #c-coach.fill-key #res-row{display:none!important}
 .vcard [hidden]{display:none!important}
+.vcard.dd-open{margin-bottom:150px}
 #c-coach.fill-key #dd-prov{pointer-events:none;opacity:.55;cursor:not-allowed}
 #c-coach.fill-key{border-color:rgba(98,168,255,.4);box-shadow:0 0 0 3px rgba(98,168,255,.12)}
 #c-coach.fill-key .ks-pw{display:flex!important}

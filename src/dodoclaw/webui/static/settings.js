@@ -568,6 +568,12 @@ async function saveKey() {
   await refresh();
   if (r && r.fill_only && r.ok) {
     jumpBack = r.back === 'tts' ? 'tts' : 'stt';
+    // 用户是为了用这一块才去填 Key：保存成功后顺手打开它（和 jump-back 稿一致）
+    try {
+      if (jumpBack === 'tts' && !S.voice.tts_on) await api().set_tts(true);
+      if (jumpBack === 'stt' && !S.voice.ask_on) await api().save_settings({ voice_ask: true });
+    } catch (e) { /* switch stays off; the card shows why */ }
+    await refresh();
     clearTimeout(jumpBackT);
     jumpBackT = setTimeout(() => { jumpBack = null; refresh(); }, 4000);
     renderVoice(S);
@@ -739,16 +745,21 @@ onReady(async () => {
   function closeVoiceMenus() {
     ['stt-menu', 'tts-menu', 'voice-menu'].forEach(id => { const m = $('#' + id); if (m) m.hidden = true; });
     ['dd-stt', 'dd-tts', 'dd-voice'].forEach(id => { const d = $('#' + id); if (d) { d.classList.remove('open'); d.setAttribute('aria-expanded', 'false'); } });
+    document.querySelectorAll('.vcard.dd-open').forEach(c => c.classList.remove('dd-open'));
   }
   function wireDd(ddId, menuId, onPick) {
     const dd = $('#' + ddId), menu = $('#' + menuId);
     if (!dd || !menu) return;
     dd.onclick = (e) => {
-      if (dd.classList.contains('dis')) return;
       e.stopPropagation();
+      if (dd.classList.contains('dis')) return toast(dd.title || '现在还不能选', { icon: 'info' });
       const open = menu.hidden;
       closeVoiceMenus();
-      if (open) { menu.hidden = false; dd.classList.add('open'); dd.setAttribute('aria-expanded', 'true'); }
+      if (open) {
+        menu.hidden = false; dd.classList.add('open'); dd.setAttribute('aria-expanded', 'true');
+        dd.closest('.vcard').classList.add('dd-open');
+        menu.scrollIntoView({ block: 'nearest' });
+      }
     };
     menu.onclick = async (e) => {
       const mi = e.target.closest('.mi'); if (!mi || !mi.dataset.v) return;
@@ -771,7 +782,7 @@ onReady(async () => {
     if ($('#sw-tts').classList.contains('dis')) {
       if (S.voice.tts_available === false && (S.voice.tts_backend || 'edge') === 'edge') return noTts();
       if (S.voice.tts_key && !S.voice.tts_key.configured) return toast('先点「去填 Key」保存 Key', { icon: 'alert' });
-      return;
+      return toast('播报现在开不了，详情见日志', { icon: 'alert' });
     }
     const r = await api().set_tts(!S.voice.tts_on);
     if (r && r.msg) toast(r.msg, { icon: 'alert' }); else flashSaved();
@@ -793,7 +804,7 @@ onReady(async () => {
     if ($('#sw-ask').classList.contains('dis')) {
       if (S.voice.stt_key && !S.voice.stt_key.configured) return toast('先点「去填 Key」保存 Key', { icon: 'alert' });
       if (!S.voice.whisper_ready) return toast('缺少本地识别组件', { icon: 'info' });
-      return;
+      return toast('语音识别现在开不了，详情见日志', { icon: 'alert' });
     }
     const turningOn = !S.voice.ask_on;
     if (turningOn && S.voice.stt_backend === 'whisper' && S.voice.whisper_ready && !S.voice.whisper_model_ready) {
