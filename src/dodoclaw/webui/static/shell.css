@@ -163,6 +163,7 @@ html,body{height:100%;background:var(--bg-0);overflow:hidden;user-select:none}
 /* D12 custom providers + STT missing/download */
 .ferr{display:none;font-size:11.5px;color:var(--danger);margin-top:4px;line-height:1.4;width:100%}
 .ferr.on,.row.err .ferr{display:block}
+#c-custom-form .row .v{flex-wrap:wrap} /* inline error drops below the input instead of squeezing it */
 .clist{display:flex;flex-direction:column;gap:6px;flex:1;min-width:0}
 .clist .ci{display:flex;align-items:center;gap:10px;min-height:44px;padding:8px 12px;border-radius:10px;background:rgba(0,0,0,.22);border:1px solid var(--line);cursor:pointer}
 .clist .ci:hover{border-color:var(--line-2);background:rgba(255,255,255,.04)}

@@ -266,6 +266,8 @@ def test_custom_inline_error_text_follows_backend():
     html = (root / "settings.html").read_text(encoding="utf-8")
     assert "$(errEl).textContent = r.reason_zh" in js
     assert 'id="cf-err-url">接口地址连不上' in html
+    css = (root / "shell.css").read_text(encoding="utf-8")
+    assert "#c-custom-form .row .v{flex-wrap:wrap}" in css
 
 
 def test_whisper_download_uses_plain_http_unless_user_set(monkeypatch):
