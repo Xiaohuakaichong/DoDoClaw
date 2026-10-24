@@ -23,6 +23,16 @@ ReminderFn = Callable[[ReminderEvent], None]
 GsiFn = Callable[[GameSnapshot], None]
 
 
+def _voice_pick(yaml_value: object, env_value: str) -> str:
+    """voice.stt_backend / tts_backend from settings.yaml unless it is mock/empty;
+    then a non-mock .env value; else mock."""
+    y = str(yaml_value or "").strip()
+    if y and y.lower() != "mock":
+        return y
+    e = (env_value or "").strip()
+    return e or y or "mock"
+
+
 class DoDoClawService:
     """Headless core used by CLI and desktop GUI."""
 
@@ -69,8 +79,10 @@ class DoDoClawService:
 
         voice_cfg = self.yaml.get("voice") or {}
         self.record_seconds = float(voice_cfg.get("record_seconds") or 5)
-        self.stt_backend = self.settings.stt_backend or voice_cfg.get("stt_backend", "mock")
-        self.tts_backend = self.settings.tts_backend or voice_cfg.get("tts_backend", "mock")
+        # settings.yaml voice.* (written by the settings page) wins; a non-mock
+        # STT_BACKEND / TTS_BACKEND in .env still works for older setups.
+        self.stt_backend = _voice_pick(voice_cfg.get("stt_backend"), self.settings.stt_backend)
+        self.tts_backend = _voice_pick(voice_cfg.get("tts_backend"), self.settings.tts_backend)
         self.stt_model = self.settings.stt_model or str(voice_cfg.get("stt_model") or "")
         self.tts_model = self.settings.tts_model or str(voice_cfg.get("tts_model") or "")
         self.tts_voice = self.settings.tts_voice or str(voice_cfg.get("tts_voice") or "")

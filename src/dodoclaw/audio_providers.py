@@ -126,6 +126,18 @@ TTS_BACKENDS: dict[str, AudioBackendSpec] = {
             "wenrounansheng",
         ),
     ),
+    "siliconflow": AudioBackendSpec(
+        id="siliconflow",
+        name="硅基流动 CosyVoice",
+        kind="tts",
+        default_model="FunAudioLLM/CosyVoice2-0.5B",
+        models=("FunAudioLLM/CosyVoice2-0.5B",),
+        key_from_llm_provider="siliconflow",
+        base_url="https://api.siliconflow.cn/v1",
+        # Docs: POST /audio/speech; voice = "{model}:{name}" e.g. …:anna
+        note="OpenAI 兼容 · CosyVoice2-0.5B",
+        voices=("anna", "bella", "claire", "diana"),
+    ),
 }
 
 DEFAULT_STT = "mock"

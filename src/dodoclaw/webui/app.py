@@ -22,8 +22,45 @@ OV_BG = "#0a0c11"  # opaque card colour: no white flash, no grey corners
 URGENT_KEYS = ("roshan", "aegis", "肉山", "盾")
 OV_POS = (24, 120)
 
-TTS_ZH = {"mock": "未配置", "edge": "Edge 免费声音", "stepfun_plan": "阶跃语音", "stepfun": "阶跃语音"}
-STT_ZH = {"mock": "关", "whisper": "本地识别", "stepfun_plan": "云端识别", "stepfun": "云端识别", "siliconflow": "云端识别"}
+TTS_ZH = {
+    "mock": "未配置",
+    "edge": "Edge 免费声音",
+    "stepfun_plan": "阶跃",
+    "stepfun": "阶跃",
+    "siliconflow": "硅基流动 CosyVoice",
+}
+STT_ZH = {
+    "mock": "关",
+    "whisper": "本地 Whisper",
+    "stepfun_plan": "阶跃",
+    "stepfun": "阶跃",
+    "siliconflow": "硅基流动 SenseVoice",
+}
+# 识别 / 播报 are picked on their own, independent of the coach (PM D13). Cloud ones
+# reuse a key saved for that vendor in the coach section: ui id -> (name, key flag).
+VOICE_VENDOR = {"siliconflow": ("硅基流动", "siliconflow_key"), "stepfun": ("阶跃", "stepfun_key")}
+STT_CHOICES = ("whisper", "siliconflow", "stepfun")  # ui ids; 阶跃 = stepfun_plan | stepfun
+TTS_CHOICES = ("edge", "stepfun", "siliconflow")
+VOICE_ZH = {
+    "cixingnansheng": "磁性男声",
+    "linjiajiejie": "邻家姐姐",
+    "zhengpaiqingnian": "正派青年",
+    "yuanqishaonv": "元气少女",
+    "wenrounansheng": "温柔男声",
+    "anna": "anna（女声）",
+    "bella": "bella（女声）",
+    "claire": "claire（女声）",
+    "diana": "diana（女声）",
+    "zh-CN-XiaoxiaoNeural": "晓晓（女声）",
+    "zh-CN-XiaoyiNeural": "晓伊（女声）",
+    "zh-CN-YunxiNeural": "云希（男声）",
+    "zh-CN-YunyangNeural": "云扬（男声）",
+}
+MSG_NO_PREVIEW = "这个服务商暂不支持试听，打开播报后提醒会直接用它念"
+
+
+def _ui_backend(bid: str) -> str:
+    return "stepfun" if bid in ("stepfun_plan", "stepfun") else bid
 GAME_STATE_ZH = {
     "DOTA_GAMERULES_STATE_INIT": "准备中",
     "DOTA_GAMERULES_STATE_WAIT_FOR_PLAYERS_TO_LOAD": "加载中",
@@ -172,10 +209,14 @@ class Bridge:
         self._ui_path = self._svc.settings.yaml_path()
         self.ui = settings_store.load(self._ui_path)
         self.reduce_motion = bool(self.ui["reduce_motion"])
-        if self.ui["voice_ask"] is None:  # first run: keep whatever backend is configured
-            self.ui["voice_ask"] = self._svc.stt_backend != "mock"
-        elif self.ui["voice_ask"] and self._svc.stt_backend == "mock":
-            self._apply_stt(True)
+        self._pref("tts_voice")  # remember the configured models / voice before any switch
+        self._key_fill: dict[str, str] | None = None  # {provider, purpose} while 去填 Key
+        # PM D13: 识别 switch defaults OFF (no mic / no 150MB download on first open)
+        if self.ui["voice_ask"] is None:
+            self.ui["voice_ask"] = False
+        if self.ui["tts_on"] is None:  # first run: Edge is free — keep whatever TTS is configured
+            self.ui["tts_on"] = self._svc.tts_backend != "mock"
+        self._sync_voice()
         self._last_test: dict[str, Any] = {}
 
     # ── backend events ───────────────────────────────
@@ -354,7 +395,113 @@ class Bridge:
         return bool(self._tts_ok)
 
     def _stt_default(self, key: dict[str, Any]) -> str:
+        """Legacy 跟随服务商 default; only used to migrate settings from before PM D13."""
         return "cloud" if key["has_stt"] else "local"
+
+    def _pref(self, name: str) -> str:
+        pref = getattr(self, "_voice_pref", None)
+        if pref is None:
+            svc = self._svc
+            pref = self._voice_pref = {
+                k: str(getattr(svc, k, "") or "") for k in ("stt_model", "tts_model", "tts_voice")
+            }
+        return pref[name]
+
+    def _voice_yaml(self) -> dict[str, Any]:
+        try:
+            return dict(self._svc.settings.load_yaml().get("voice") or {})
+        except Exception:
+            logger.debug("read voice settings", exc_info=True)
+            return {}
+
+    def _stepfun_variant(self, key: dict[str, Any], current: str = "") -> str:
+        """阶跃 has two endpoints on one key; keep the saved one, else follow the coach's."""
+        if current in ("stepfun_plan", "stepfun"):
+            return current
+        return key["provider"] if key.get("provider") in ("stepfun_plan", "stepfun") else "stepfun_plan"
+
+    def _stt_choice(self, key: dict[str, Any]) -> str:
+        """Picked 识别 backend (whisper | siliconflow | stepfun_*), on or off."""
+        from dodoclaw.audio_providers import get_stt_backend
+
+        for raw in (self._voice_yaml().get("stt_backend"), self._svc.settings.stt_backend):
+            bid = get_stt_backend(str(raw)).id if raw else ""
+            if bid != "mock" and _ui_backend(bid) in STT_CHOICES:
+                return bid
+        mode = self.ui.get("stt_mode")
+        if mode == "cloud":
+            if not key.get("siliconflow_key") and key.get("stepfun_key"):
+                return self._stepfun_variant(key)
+            return "siliconflow"
+        return "whisper"  # PM D13 template default
+
+    def _tts_choice(self) -> str:
+        """Picked 播报 backend (edge | stepfun_* | siliconflow); default Edge."""
+        from dodoclaw.audio_providers import get_tts_backend
+
+        for raw in (self._voice_yaml().get("tts_backend"), self._svc.settings.tts_backend):
+            bid = get_tts_backend(str(raw)).id if raw else ""
+            if bid != "mock" and _ui_backend(bid) in TTS_CHOICES:
+                return bid
+        return "edge"
+
+    @staticmethod
+    def _missing_key(bid: str, key: dict[str, Any]) -> str:
+        v = VOICE_VENDOR.get(_ui_backend(bid))
+        return _ui_backend(bid) if v and not key.get(v[1]) else ""
+
+    @staticmethod
+    def _need_key_msg(vendor: str) -> str:
+        zh = VOICE_VENDOR[vendor][0]
+        return f"还没保存{zh} Key：点「去填 Key」只存 Key，教练服务商不会变"
+
+    def _stt_runtime(self, bid: str) -> dict[str, str]:
+        from dodoclaw.audio_providers import get_stt_backend
+
+        m = self._pref("stt_model")
+        return {"stt_backend": bid, "stt_model": m if m in get_stt_backend(bid).models else ""}
+
+    def _tts_runtime(self, bid: str) -> dict[str, str]:
+        from dodoclaw.audio_providers import get_tts_backend
+
+        spec = get_tts_backend(bid)
+        m, v = self._pref("tts_model"), self._pref("tts_voice")
+        # strip CosyVoice "model:name" → name for the voices list
+        bare = v.split(":", 1)[-1] if ":" in v else v
+        if bid == "siliconflow":
+            bare = bare if bare in spec.voices else (spec.voices[0] if spec.voices else "anna")
+            v_out = bare  # SiliconFlowTTS prefixes the model
+        elif bid == "edge":
+            bare = v if v.endswith("Neural") else ""
+            v_out = bare
+        else:
+            bare = bare if bare in spec.voices else ""
+            v_out = bare
+        return {
+            "tts_backend": bid,
+            "tts_model": m if m in spec.models else "",
+            "tts_voice": v_out,
+        }
+
+    def _sync_voice(self) -> None:
+        """Make the running stack match the saved choice and the two switches (startup)."""
+        from dodoclaw.audio_providers import get_stt_backend, get_tts_backend
+
+        key = self._key_status()
+        ask, tts = bool(self.ui["voice_ask"]), bool(self.ui["tts_on"])
+        want_stt = self._stt_choice(key) if ask else "mock"
+        want_tts = self._tts_choice() if tts else "mock"
+        # cloud without key → keep switch off / stack mock
+        if ask and self._missing_key(want_stt, key):
+            self.ui["voice_ask"] = False
+            want_stt = "mock"
+        if tts and self._missing_key(want_tts, key):
+            self.ui["tts_on"] = False
+            want_tts = "mock"
+        if get_stt_backend(self._svc.stt_backend).id != want_stt:
+            self._apply_stt(want_stt != "mock")
+        if get_tts_backend(self._svc.tts_backend).id != want_tts:
+            self._apply_tts(want_tts != "mock")
 
     def _apply_stt(self, on: bool) -> str:
         """Switch the speech-recognition backend. Returns an error in Chinese or ''."""
@@ -363,24 +510,15 @@ class Bridge:
                 self._svc.reload_voice(stt_backend="mock")
             return ""
         key = self._key_status()
-        mode = self.ui.get("stt_mode") or self._stt_default(key)
-        if mode == "local":
-            # Missing component: UI greys the card (whisper_ready=False). Do not
-            # toast over the option cards (design settings-voice-stt-missing).
+        backend = self._stt_choice(key)
+        if backend == "whisper":
             from dodoclaw.webui import whisper_model as _wm
             if not _wm.component_available():
                 return "缺少本地识别组件"
-            backend = "whisper"
-        else:
-            # Prefer SiliconFlow SenseVoice when that key is available; else 阶跃.
-            if key.get("siliconflow_key"):
-                backend = "siliconflow"
-            elif key.get("stepfun_key"):
-                backend = key["provider"] if key["provider"] in ("stepfun_plan", "stepfun") else "stepfun_plan"
-            else:
-                return "云端识别需要硅基流动或阶跃的 Key：先保存 Key，或把教练切到其中一家"
+        elif self._missing_key(backend, key):
+            return self._need_key_msg(self._missing_key(backend, key))
         try:
-            self._svc.reload_voice(stt_backend=backend)
+            self._svc.reload_voice(**self._stt_runtime(backend))
         except Exception:
             logger.exception("enable stt failed")
             return "语音识别没能启动，详情见日志"
@@ -388,37 +526,197 @@ class Bridge:
             return "语音识别没能启动，详情见日志"
         return ""
 
+    def _apply_tts(self, on: bool) -> str:
+        """Switch the 播报 backend. Returns an error in Chinese or ''."""
+        if not on:
+            if self._svc.tts_backend != "mock":
+                self._svc.reload_voice(tts_backend="mock")
+            return ""
+        backend = self._tts_choice()
+        if backend == "edge" and not self._tts_available():
+            return "缺少声音组件，换最新安装包即可恢复"
+        need = self._missing_key(backend, self._key_status())
+        if need:
+            return self._need_key_msg(need)
+        try:
+            self._svc.reload_voice(**self._tts_runtime(backend))
+        except Exception:
+            logger.exception("set tts failed")
+            return "播报没能启动，详情见日志"
+        if self._svc.tts_backend == "mock":
+            return "播报没能启动，详情见日志"
+        return ""
+
+    def _pick_stt(self, uid: str) -> tuple[str, str]:
+        """识别 dropdown: always save voice.stt_backend; apply only if switch is on."""
+        from dodoclaw import config
+
+        if uid not in STT_CHOICES:
+            return "没有这个识别方式", ""
+        key = self._key_status()
+        bid = self._stepfun_variant(key, self._stt_choice(key)) if uid == "stepfun" else uid
+        config.save_voice_choice(stt_backend=bid)
+        self.ui["stt_mode"] = None
+        need = self._missing_key(bid, key)
+        if need:
+            if self.ui.get("voice_ask"):
+                self.ui["voice_ask"] = False
+                self._apply_stt(False)
+            return "", need  # ok=True but need_key set — UI shows 去填 Key
+        if bid == "whisper":
+            from dodoclaw.webui import whisper_model as _wm
+            if not _wm.component_available():
+                if self.ui.get("voice_ask"):
+                    self.ui["voice_ask"] = False
+                    self._apply_stt(False)
+                return "缺少本地识别组件", ""
+        if self.ui.get("voice_ask"):
+            msg = self._apply_stt(True)
+            if msg:
+                self.ui["voice_ask"] = False
+                self._apply_stt(False)
+                return msg, ""
+        return "", ""
+
+    def _pick_tts(self, uid: str) -> tuple[str, str]:
+        """播报 dropdown: always save voice.tts_backend; apply only if switch is on."""
+        from dodoclaw import config
+
+        if uid not in TTS_CHOICES:
+            return "没有这个声音", ""
+        key = self._key_status()
+        bid = self._stepfun_variant(key, self._tts_choice()) if uid == "stepfun" else uid
+        config.save_voice_choice(tts_backend=bid)
+        need = self._missing_key(bid, key)
+        if need:
+            if self.ui.get("tts_on"):
+                self.ui["tts_on"] = False
+                self._apply_tts(False)
+            return "", need
+        if bid == "edge" and not self._tts_available():
+            if self.ui.get("tts_on"):
+                self.ui["tts_on"] = False
+                self._apply_tts(False)
+            return "缺少声音组件，换最新安装包即可恢复", ""
+        if self.ui.get("tts_on"):
+            msg = self._apply_tts(True)
+            if msg:
+                self.ui["tts_on"] = False
+                self._apply_tts(False)
+                return msg, ""
+        return "", ""
+
+    def _key_info(self, bid: str, key: dict[str, Any]) -> dict[str, Any] | None:
+        vend = VOICE_VENDOR.get(_ui_backend(bid))
+        if not vend:
+            return None
+        return {
+            "provider": _ui_backend(bid),
+            "provider_name": vend[0],
+            "configured": bool(key.get(vend[1])),
+        }
+
+    def _tts_voices(self, bid: str) -> list[dict[str, str]]:
+        from dodoclaw.audio_providers import get_tts_backend
+        from dodoclaw.webui import tts_preview
+
+        spec = get_tts_backend(bid)
+        if bid == "edge":
+            ids = list(tts_preview.VOICE_ZH.keys())
+            return [{"id": i, "name": tts_preview.VOICE_ZH[i]} for i in ids]
+        return [{"id": v, "name": VOICE_ZH.get(v, v)} for v in spec.voices]
+
+    def _voice_opts(self, key: dict[str, Any], kind: str, chosen: str) -> list[dict[str, Any]]:
+        from dodoclaw.audio_providers import get_stt_backend, get_tts_backend
+
+        out = []
+        for uid in STT_CHOICES if kind == "stt" else TTS_CHOICES:
+            vend = VOICE_VENDOR.get(uid)
+            bid = self._stepfun_variant(key, chosen) if uid == "stepfun" else uid
+            ready = bool(key.get(vend[1])) if vend else True
+            if uid == "whisper":
+                hint = "离线，免 Key · 首次使用下载约 150 MB"
+                tag = "离线 · 免 Key"
+            elif uid == "edge":
+                hint = "免费，免 Key · 需要联网"
+                tag = "免 Key"
+            elif uid == "siliconflow" and kind == "stt":
+                hint = f"复用硅基流动 Key · {'已保存' if ready else '还没配'}"
+                tag = "云端"
+            elif uid == "siliconflow":
+                hint = f"复用硅基流动 Key · {'已保存' if ready else '还没配'}"
+                tag = "云端"
+            else:
+                hint = f"复用阶跃 Key · {'已保存' if ready else '还没配'}"
+                tag = "云端"
+            out.append({
+                "id": uid,
+                "name": STT_ZH.get(bid, TTS_ZH.get(bid, uid)) if kind == "stt" else TTS_ZH.get(bid, uid),
+                "sel": _ui_backend(chosen) == uid,
+                "default": uid == ("whisper" if kind == "stt" else "edge"),
+                "tag": tag,
+                "hint": hint,
+                "needs_key": bool(vend),
+                "key_ready": ready,
+                "slow_note": "",  # 「首声稍慢」only if measured clearly slower than Edge
+            })
+        return out
+
     def _voice_state(self, key: dict[str, Any]) -> dict[str, Any]:
         from dodoclaw.webui import tts_preview
         from dodoclaw.webui import whisper_model
+        from dodoclaw.audio_providers import get_stt_backend, get_tts_backend
 
         svc = self._svc
         ready = whisper_model.component_available()
         dl = whisper_model.status()
-        cloud_share = ""
-        if key.get("provider") == "siliconflow" and key.get("siliconflow_key"):
-            cloud_share = "与教练共用硅基流动 Key"
-        elif key.get("siliconflow_key"):
-            cloud_share = "使用已保存的硅基流动 Key"
-        elif key.get("stepfun_key"):
-            cloud_share = "与教练共用阶跃 Key" if key.get("provider") in ("stepfun", "stepfun_plan") else "使用已保存的阶跃 Key"
+        stt_bid, tts_bid = self._stt_choice(key), self._tts_choice()
+        stt_ui, tts_ui = _ui_backend(stt_bid), _ui_backend(tts_bid)
+        stt_need = self._missing_key(stt_bid, key)
+        tts_need = self._missing_key(tts_bid, key)
+        tts_rt = self._tts_runtime(tts_bid)
+        voices = self._tts_voices(tts_bid)
+        voice_id = tts_rt["tts_voice"] or (voices[0]["id"] if voices else "")
+        voice_zh = next((v["name"] for v in voices if v["id"] == voice_id), VOICE_ZH.get(voice_id, voice_id))
+        ask_blocked = bool(stt_need) or (stt_ui == "whisper" and not ready)
+        tts_blocked = bool(tts_need) or (tts_ui == "edge" and not self._tts_available())
+        model_zh = ""
+        if stt_ui == "siliconflow":
+            model_zh = get_stt_backend("siliconflow").default_model
+        elif stt_ui == "stepfun":
+            model_zh = get_stt_backend(stt_bid).default_model
         return {
             "ask_on": bool(self.ui["voice_ask"]) and svc.stt_backend != "mock",
-            "stt_mode": self.ui.get("stt_mode") or self._stt_default(key),
-            "stt_default": self._stt_default(key),
-            "stt_zh": STT_ZH.get(svc.stt_backend, "已配置"),
+            "stt_enabled": bool(self.ui["voice_ask"]),
+            "ask_blocked": ask_blocked,
+            "stt_backend": stt_ui,
+            "stt_opts": self._voice_opts(key, "stt", stt_bid),
+            "stt_zh": STT_ZH.get(stt_bid, "已配置"),
+            "stt_model": model_zh,
+            "stt_hint": "语音不出本机，模型约 150 MB" if stt_ui == "whisper" else "",
+            "stt_key": self._key_info(stt_bid, key),
             "whisper_ready": ready,
             "whisper_model_ready": bool(dl.get("ready")),
             "whisper_download": dl,
-            "cloud_key_ready": bool(key.get("siliconflow_key") or key.get("stepfun_key")),
-            "cloud_share_zh": cloud_share,
-            "tts_on": svc.tts_backend != "mock",
-            "tts_zh": TTS_ZH.get(svc.tts_backend, "已配置"),
-            "preview_voice_zh": _preview_voice_zh(getattr(svc, "tts_voice", "")),
-            # README D10 #coach,tts-missing: 声音 row says so up front; 试听 and the switch are disabled
+            "tts_on": bool(self.ui.get("tts_on")) and svc.tts_backend != "mock",
+            "tts_blocked": tts_blocked,
+            "tts_backend": tts_ui,
+            "tts_opts": self._voice_opts(key, "tts", tts_bid),
+            "tts_zh": TTS_ZH.get(tts_bid, "已配置"),
+            "tts_hint": "免费，需要联网" if tts_ui == "edge" else "",
+            "tts_model": get_tts_backend(tts_bid).default_model if tts_ui == "siliconflow" else "",
+            # 「首声稍慢」reserved; only shown if measured clearly slower than Edge (not measured → off)
+            "tts_slow_note": "",
+            "tts_key": self._key_info(tts_bid, key),
+            "tts_voices": voices,
+            "tts_voice": voice_id,
+            "tts_voice_zh": voice_zh,
+            "preview_ok": tts_ui == "edge",
+            "preview_off_zh": "" if tts_ui == "edge" else MSG_NO_PREVIEW,
             "tts_available": self._tts_available(),
             "tts_missing_zh": tts_preview.MSG_NO_EDGE_SHORT,
             "tts_missing_detail_zh": tts_preview.MSG_NO_EDGE_DETAIL,
+            "key_fill": dict(self._key_fill) if getattr(self, "_key_fill", None) else None,
         }
 
     def settings_state(self) -> dict[str, Any]:
@@ -479,21 +777,22 @@ class Bridge:
         # 小窗透明度 is gone (D11): the overlay window is opaque, a slider would do nothing.
         if "auto_overlay" in patch:
             self.ui["auto_overlay"] = bool(patch["auto_overlay"])
-        if "stt_mode" in patch and patch["stt_mode"] in ("local", "cloud"):
-            self.ui["stt_mode"] = patch["stt_mode"]
-            if self.ui["voice_ask"]:
-                msg = self._apply_stt(True)
-                if msg:
-                    self.ui["voice_ask"] = False
-                    self._apply_stt(False)
+        need = ""
+        if "stt_backend" in patch:
+            msg, need = self._pick_stt(str(patch["stt_backend"] or ""))
+        if "tts_backend" in patch:
+            msg, need = self._pick_tts(str(patch["tts_backend"] or ""))
         if "voice_ask" in patch:
             on = bool(patch["voice_ask"])
             msg = self._apply_stt(on)
             self.ui["voice_ask"] = on and not msg
+            if msg and on:
+                key = self._key_status()
+                need = self._missing_key(self._stt_choice(key), key)
         if msg and "reminder" in patch:
             return {"ok": False, "msg": msg}
         self._save_ui()
-        return {"ok": not msg, "msg": msg}
+        return {"ok": not msg, "msg": msg, "need_key": need}
 
     def open_app_dir(self) -> bool:
         """Folder holding .env: next to the exe, or the project root from source."""
@@ -530,11 +829,14 @@ class Bridge:
         self._coach_gen = getattr(self, "_coach_gen", 0) + 1
 
     def _follow_provider_stt(self) -> str:
-        """Speech recognition left on 跟随服务商 (stt_mode unset) follows a provider/key
-        change; a mode the user picked by hand is never changed."""
-        if self.ui.get("voice_ask") and not self.ui.get("stt_mode"):
-            return self._apply_stt(True)
-        return ""
+        """识别 / 播报 are picked on their own (PM D13): a provider switch never changes
+        them. After a key save / delete a cloud pick is rebuilt so it uses the new key."""
+        msg = ""
+        if self.ui.get("voice_ask") and _ui_backend(self._stt_choice(self._key_status())) in VOICE_VENDOR:
+            msg = self._apply_stt(True)
+        if self.ui.get("tts_on") and _ui_backend(self._tts_choice()) in VOICE_VENDOR:
+            self._apply_tts(True)
+        return msg
 
     def list_providers(self) -> list[dict[str, Any]]:
         """服务商 dropdown: the five presets with booleans only (README D10 js_api)."""
@@ -612,12 +914,17 @@ class Bridge:
 
         strip → KeyStore.set → reload → test_key. Save first, then test: a failed
         test keeps the key. Returns {ok, kind, reason_zh, ms, model, configured} —
-        never the key; nothing here logs it or puts it in an error."""
+        never the key; nothing here logs it or puts it in an error.
+
+        In 去填 Key (key_fill) mode the coach.provider is left alone: we only store
+        the Key for the voice backend's vendor and return to that voice card."""
         from dodoclaw.providers import get_provider
         from dodoclaw.webui import keystore
 
         pid = str(provider_id or "")
-        if pid != self._svc.provider_id:
+        fill = getattr(self, "_key_fill", None)
+        fill_only = bool(fill and fill.get("provider") == pid and pid in VOICE_VENDOR)
+        if not fill_only and pid != self._svc.provider_id:
             # the dropdown changed while the key was being typed: never file it under another provider
             return self._key_fail("invalid", "服务商刚刚变了，请重新粘贴")
         from dodoclaw.webui import customs
@@ -639,6 +946,25 @@ class Bridge:
         logger.info("saved key for %s", log_id)
         self.reload_env()
         self._switched_from = ""
+        back = ""
+        if fill_only:
+            # only store the Key; do not switch coach.provider / do not test the coach
+            purpose = fill.get("purpose") or "stt"
+            self._key_fill = None
+            stt_msg = self._follow_provider_stt()
+            self._save_ui()
+            return {
+                "ok": True,
+                "kind": "ok",
+                "reason_zh": "已保存",
+                "ms": None,
+                "model": "",
+                "configured": True,
+                "saved": True,
+                "fill_only": True,
+                "back": purpose,  # 'stt' | 'tts' — UI scrolls back
+                "msg": stt_msg,
+            }
         res = self.test_key()
         stt_msg = self._follow_provider_stt()
         self._save_ui()
@@ -916,22 +1242,70 @@ class Bridge:
 
         return bool(webbrowser.open(url))
 
+    def begin_key_fill(self, provider_id: str, purpose: str = "stt") -> dict[str, Any]:
+        """去填 Key → : lock coach UI to that vendor's Key row only; do not change coach.provider."""
+        pid = str(provider_id or "")
+        if pid not in VOICE_VENDOR:
+            return {"ok": False, "msg": "没有这家服务商"}
+        if purpose not in ("stt", "tts"):
+            purpose = "stt"
+        self._key_fill = {"provider": pid, "purpose": purpose}
+        return {
+            "ok": True,
+            "msg": "",
+            "key_fill": dict(self._key_fill),
+            "coach_provider": self._svc.provider_id,  # still the real coach
+            "fill_name": f"{VOICE_VENDOR[pid][0]} · 只填 Key",
+            "coach_name": self._provider_label(),
+        }
+
+    def cancel_key_fill(self) -> dict[str, Any]:
+        self._key_fill = None
+        return {"ok": True, "msg": ""}
+
+    def set_tts_voice(self, voice_id: str) -> dict[str, Any]:
+        """Persist the picked 声音 under voice.tts_voice and reload if 播报 is on."""
+        from dodoclaw import config
+        from dodoclaw.audio_providers import get_tts_backend
+
+        bid = self._tts_choice()
+        spec = get_tts_backend(bid)
+        vid = str(voice_id or "").strip()
+        if bid == "edge":
+            from dodoclaw.webui import tts_preview
+            ok_ids = set(tts_preview.VOICE_ZH)
+            if vid not in ok_ids:
+                return {"ok": False, "msg": "没有这个声音"}
+        elif vid not in spec.voices:
+            return {"ok": False, "msg": "没有这个声音"}
+        # write tts_voice into the voice: block (reuse block saver via a thin helper)
+        self._voice_pref["tts_voice"] = vid
+        config.save_voice_choice(tts_voice=vid)
+        if self.ui.get("tts_on") and not self._missing_key(bid, self._key_status()):
+            try:
+                self._svc.reload_voice(**self._tts_runtime(bid))
+            except Exception:
+                logger.exception("reload tts voice failed")
+                return {"ok": False, "msg": "声音没能切换，详情见日志"}
+        return {"ok": True, "msg": ""}
+
     def set_tts(self, on: bool) -> dict[str, Any]:
-        if on and not self._tts_available():
-            return {"ok": False, "msg": "缺少声音组件，换最新安装包即可恢复"}
-        try:
-            self._svc.reload_voice(tts_backend="edge" if on else "mock")
-        except Exception:
-            logger.exception("set tts failed")
-            return {"ok": False, "msg": "播报没能启动，详情见日志"}
-        return {"ok": (self._svc.tts_backend != "mock") == bool(on), "msg": ""}
+        """语音播报 switch: runs the picked backend (voice.tts_backend) or nothing; saved in ui.tts_on."""
+        msg = self._apply_tts(bool(on))
+        need = self._missing_key(self._tts_choice(), self._key_status()) if msg and on else ""
+        if not msg:
+            self.ui["tts_on"] = bool(on)
+            self._save_ui()
+        return {"ok": not msg, "msg": msg, "need_key": need}
 
     def preview_tts(self) -> dict[str, Any]:
-        """试听 with Edge TTS, regardless of whether 语音播报 is on. Returns {ok, msg}."""
+        """试听 with Edge TTS only (tts_preview is Edge-only). Cloud backends: disabled with reason."""
         from dodoclaw.webui import tts_preview
 
+        if _ui_backend(self._tts_choice()) != "edge":
+            return {"ok": False, "msg": MSG_NO_PREVIEW}
         try:
-            return tts_preview.preview(tts_preview.edge_voice(getattr(self._svc, "tts_voice", "")))
+            return tts_preview.preview(tts_preview.edge_voice(self._tts_runtime("edge")["tts_voice"]))
         except Exception:
             logger.exception("tts preview failed")
             return {"ok": False, "msg": tts_preview.MSG_UNKNOWN}

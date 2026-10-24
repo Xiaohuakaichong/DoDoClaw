@@ -257,24 +257,37 @@ def save_coach_choice(provider_id: str, model: str = "", base_url: str = "") -> 
     the provider choice lives there, not in .env). Only those lines of the
     ``coach:`` block change; comments and everything else are kept.
     Empty model / base_url removes the override (provider default)."""
+    return _save_block_keys("coach", {"provider": provider_id, "model": model, "base_url": base_url})
+
+
+def save_voice_choice(**values: str) -> Path:
+    """Write voice.stt_backend / voice.tts_backend (the settings page's 识别 / 播报
+    pickers) into config/settings.yaml, same rules as save_coach_choice: only the
+    given lines of the ``voice:`` block change; an empty value removes the line."""
+    allowed = {"stt_backend", "tts_backend", "tts_voice", "tts_model", "stt_model"}
+    return _save_block_keys("voice", {k: str(v or "") for k, v in values.items() if k in allowed})
+
+
+def _save_block_keys(section: str, want: dict[str, str]) -> Path:
     import re
 
     path = config_dir() / "settings.yaml"
     lines = path.read_text(encoding="utf-8").splitlines() if path.exists() else []
-    start = next((i for i, ln in enumerate(lines) if re.match(r"^coach\s*:", ln)), None)
+    start = next((i for i, ln in enumerate(lines) if re.match(rf"^{section}\s*:", ln)), None)
     if start is None:
         if lines and lines[-1].strip():
             lines.append("")
-        lines.append("coach:")
+        lines.append(f"{section}:")
         start = len(lines) - 1
     end = start + 1
     while end < len(lines) and (not lines[end].strip() or lines[end][:1] in (" ", "\t")):
         end += 1
-    want = {"provider": provider_id, "model": model, "base_url": base_url}
+    want = dict(want)
+    names = "|".join(re.escape(k) for k in want) or "(?!)"
     block = lines[start + 1 : end]
     out: list[str] = []
     for ln in block:
-        m = re.match(r"^(\s+)(provider|model|base_url)\s*:", ln)
+        m = re.match(rf"^(\s+)({names})\s*:", ln)
         if m and m.group(2) in want:
             name, val = m.group(2), want.pop(m.group(2))
             if val:

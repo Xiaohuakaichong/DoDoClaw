@@ -86,7 +86,8 @@ def defaults(positions: list[int] | None = None) -> dict[str, Any]:
         },
         "overrides": [],          # rows the user toggled by hand; position changes keep them
         "voice_ask": None,        # None = derive from current speech-recognition backend
-        "stt_mode": None,         # None = follow coach provider (local | cloud)
+        "stt_mode": None,         # legacy (local | cloud); read once to pick voice.stt_backend
+        "tts_on": None,           # None = derive from the configured TTS backend
         "overlay_opacity": 88,
         "auto_overlay": True,
         "reduce_motion": False,
@@ -112,7 +113,7 @@ def merge(saved: dict[str, Any] | None) -> dict[str, Any]:
                 out["reminders"][k]["on"] = bool(v["on"])
             # lead times are not user-editable until the engine supports them
     out["overrides"] = [k for k in (saved.get("overrides") or []) if k in REMINDERS and k not in PENDING]
-    for k in ("voice_ask", "auto_overlay", "reduce_motion"):
+    for k in ("voice_ask", "tts_on", "auto_overlay", "reduce_motion"):
         if saved.get(k) is not None:
             out[k] = bool(saved[k])
     if saved.get("stt_mode") in ("local", "cloud"):

@@ -30,7 +30,8 @@ function show(sec) {
   const pane = sec === 'voice' ? 'coach' : (PANES.includes(sec) ? sec : 'rem');
   document.querySelectorAll('.pane').forEach(p => p.classList.toggle('on', p.id === 'p-' + pane));
   document.querySelectorAll('.snav a').forEach(a => a.classList.toggle('on', a.dataset.s === pane));
-  if (sec === 'voice') { const c = $('#c-voice'); c.scrollIntoView({ block: 'nearest' }); c.classList.remove('flash'); void c.offsetWidth; c.classList.add('flash'); }
+  if (sec === 'voice' || sec === 'stt') { const c = $('#c-stt'); c.scrollIntoView({ block: 'nearest' }); c.classList.remove('flash'); void c.offsetWidth; c.classList.add('flash'); }
+  if (sec === 'tts') { const c = $('#c-tts'); c.scrollIntoView({ block: 'nearest' }); c.classList.remove('flash'); void c.offsetWidth; c.classList.add('flash'); }
 }
 
 function renderRem(s) {
@@ -88,6 +89,11 @@ const TIMEOUT = { ok: false, kind: 'network', reason_zh: '等了 20 秒还没有
 function tagPill(tag, brand) { return tag ? `<span class="pill ${brand ? 'brand' : 'mute'} tiny">${esc(tag)}</span>` : ''; }
 function lastTest(k) { return localTest || k.last_test || {}; }
 function coachKs(k) {
+  // 去填 Key：只显示密码框 + 保存并测试，不管教练自己有没有 Key
+  if (S && S.voice && S.voice.key_fill) {
+    if (busy === 'save') return 'testing';
+    return $('#key-in').value.trim() ? 'typing' : 'none';
+  }
   if (busy === 'save') return 'testing';
   if (k.configured && !changing) return busy === 'retest' ? 'retest' : (lastTest(k).ok === false ? 'error' : 'ok');
   if ($('#key-in').value.trim()) return 'typing';
@@ -128,7 +134,7 @@ function renderCoachKs() {
   };
   // while 更换 Key is open the saved key still counts: the pill keeps its configured status
   const pk = ['none', 'switch', 'typing'].includes(ks) && k.configured ? (lastTest(k).ok === false ? 'error' : 'ok') : ({ switch: 'none', typing: 'none', retest: 'testing' }[ks] || ks);
-  $('#coach-pill').innerHTML = pill[pk];
+  $('#coach-pill').innerHTML = (s.voice && s.voice.key_fill) ? `<span class="pill mute">只填 Key · 教练仍用 ${esc(k.provider_name || '')}</span>` : pill[pk];
   // snav dot: 未配置 = warn, 连接失败 = err
   const dot = $('#snav-coach-dot');
   dot.style.display = pk === 'ok' || pk === 'testing' ? 'none' : '';
@@ -272,65 +278,224 @@ function renderCoach(s) {
   $("#key-in").placeholder = `粘贴 ${k.provider_short} 的 API Key`;
   $('#key-line').textContent = `${k.key_env}=你的Key`;
   renderCoachKs();
-  // 播报 · 缺少声音组件
-  const missTts = v.tts_available === false;
-  document.documentElement.classList.toggle('st-tts-missing', missTts);
-  $('#tts-pill').className = 'pill tts-ok ' + (v.tts_on ? 'ok' : 'mute');
-  $('#tts-pill').innerHTML = v.tts_on ? '<span class="dot ok"></span>已开启' : '未开启';
-  const sw = $('#sw-tts');
-  sw.classList.toggle('on', v.tts_on && !missTts);
-  sw.classList.toggle('dis', missTts);
-  sw.setAttribute('aria-disabled', String(missTts));
-  sw.title = missTts ? '缺少声音组件，开不了' : '';
-  $('#tts-name').innerHTML = `<span class="tn">${esc(v.preview_voice_zh || 'Edge 免费声音')}</span>`;
-  // 语音提问 + STT cards (missing / downloading / ready)
-  $('#sw-ask').classList.toggle('on', v.ask_on);
-  $('#c-voice').classList.toggle('ask-off', !v.ask_on);
-  document.querySelectorAll('#c-voice .opt').forEach(o => { o.classList.toggle('dis', !v.ask_on); o.setAttribute('aria-disabled', String(!v.ask_on)); });
-  $('#btn-hotkey').setAttribute('aria-disabled', String(!v.ask_on));
-  $('#ask-pill').className = 'pill ' + (v.ask_on ? 'ok' : 'mute');
-  $('#ask-pill').textContent = v.ask_on ? `已开启 · ${v.stt_zh}` : '未配置语音识别';
-  $('#ask-ico').style.color = v.ask_on ? 'var(--info)' : 'var(--text-3)';
-  $('#ask-ico use').setAttribute('href', v.ask_on ? '#mic' : '#mic-off');
+  renderVoice(s);
+}
+
+let jumpBack = null, jumpBackT = 0;
+function kreuseHtml(info, purpose) {
+  if (!info) return '';
+  const name = info.provider_name || '';
+  if (info.configured) {
+    const jb = jumpBack === purpose;
+    return `<span class="kreuse ok"><svg class="ico"><use href="#key"/></svg>复用 ${esc(name)} Key<span class="sep">·</span><span class="st"><span class="dot ok"></span>已保存</span></span>`
+      + (jb ? `<span class="savedflash"><svg class="ico"><use href="#check"/></svg>Key 已保存，${purpose === 'tts' ? '语音播报' : '语音识别'}可以用了</span>`
+            : `<span class="hint nowrap">要换 Key，在「AI 教练」里选${esc(name)}</span>`);
+  }
+  return `<span class="kreuse warn"><svg class="ico"><use href="#alert"/></svg>复用 ${esc(name)} Key<span class="sep">·</span><span class="st">还没配</span>`
+    + `<span class="link go" data-fill="${esc(info.provider)}" data-purpose="${esc(purpose)}">去填 Key →</span></span>`
+    + `<span class="hint nowrap">填好后这里自动变成“已保存”</span>`;
+}
+
+function renderVoiceMenu(menuEl, opts, footer) {
+  menuEl.innerHTML = (opts || []).map(o => {
+    const tag = o.default
+      ? '<span class="pill brand tiny">默认</span>'
+      : (o.tag ? `<span class="pill mute tiny">${esc(o.tag)}</span>` : '');
+    const hint = o.hint || '';
+    // colour the ·已保存 / ·还没配 bits
+    let ds = esc(hint);
+    ds = ds.replace('已保存', '<span class="dot ok"></span>已保存').replace('还没配', '<span class="dot warn"></span>还没配');
+    const slow = o.slow_note ? `<span class="hint" style="margin-left:auto">${esc(o.slow_note)}</span>` : '';
+    return `<div class="mi${o.sel ? ' cur' : ''}" role="option" data-v="${esc(o.id)}">${CK}<div><div class="nm">${esc(o.name)}${tag}</div><div class="ds">${ds}</div></div>${slow}</div>`;
+  }).join('') + (footer ? `<div class="ft">${footer}</div>` : '');
+}
+
+function renderVoice(s) {
+  const v = s.voice || {}, k = s.key || {};
+  const fill = v.key_fill;
+  const coach = $('#c-coach');
+  coach.classList.toggle('fill-key', !!fill);
+  const fromv = $('#fromv');
+  if (fill) {
+    fromv.classList.add('on');
+    const zh = fill.provider === 'siliconflow' ? '硅基流动' : (fill.provider === 'stepfun' ? '阶跃' : fill.provider);
+    const which = fill.purpose === 'tts' ? '语音播报' : '语音识别';
+    const keep = k.provider_name || '原来的教练';
+    $('#fromv-txt').innerHTML = `正在给<b style="color:var(--text)">${which}</b>填 ${esc(zh)} Key，教练不变。保存成功后自动回到${which}。`;
+    $('#prov-name').textContent = `${zh} · 只填 Key`;
+    $('#prov-tag').innerHTML = '';
+    $('#coach-pill').innerHTML = `<span class="pill mute">只填 Key · 教练仍用 ${esc(keep)}</span>`;
+    $("#key-in").placeholder = `粘贴 ${zh} 的 API Key`;
+  } else {
+    fromv.classList.remove('on');
+  }
+
+  $('#c-stt').classList.toggle('jb', jumpBack === 'stt');
+  $('#c-tts').classList.toggle('jb', jumpBack === 'tts');
+  // —— 识别 ——
   const whReady = !!v.whisper_ready;
   const dl = v.whisper_download || {};
   const downloading = dl.phase === 'downloading' || dl.phase === 'checking';
   const dlErr = dl.phase === 'error' || dl.phase === 'cancelled';
-  const local = $('#opt-local'), cloud = $('#opt-cloud');
-  local.classList.toggle('sel', v.stt_mode === 'local' && whReady);
-  cloud.classList.toggle('sel', v.stt_mode === 'cloud' || (!whReady && v.stt_mode === 'local'));
   const modelReady = !!v.whisper_model_ready;
-  local.classList.toggle('stt-miss', !whReady);
-  local.classList.toggle('dis-hard', !whReady);
-  $('#local-miss').hidden = whReady;
-  const showDl = whReady && (downloading || dlErr || (!modelReady && v.stt_mode === 'local'));
-  $('#local-dl').hidden = !showDl;
-  if (showDl) {
-    $('#dl-bar').style.width = (dl.pct || 0) + '%';
-    $('#dl-pct').textContent = (dl.pct || 0) + '%';
-    const mb = ((dl.bytes_done || 0) / 1048576).toFixed(0) + ' / ' + ((dl.bytes_total || 150 * 1048576) / 1048576).toFixed(0) + ' MB';
-    $('#dl-meta').textContent = dlErr ? (dl.error_zh || '下载失败') : mb;
-    $('#btn-dl-cancel').hidden = !!dlErr;
-    $('#btn-dl-retry').hidden = !dlErr;
-  }
-  const tag = (el, html) => { el.innerHTML = html; };
-  const def = '<span class="pill brand" style="height:18px;font-size:10px">默认</span>';
-  // 缺少组件时：默认标签挂到云端，不挂本地
-  if (!whReady) {
-    tag($('#tag-local'), '');
-    tag($('#tag-cloud'), def);
-    $('#d-local').textContent = '离线可用，首次下载约 150 MB';
-  } else if (downloading) {
-    tag($('#tag-local'), '<span class="pill mute tag" style="height:18px;font-size:10px">下载中</span>');
-    tag($('#tag-cloud'), v.stt_default === 'cloud' ? def : '');
-    $('#d-local').textContent = '首次使用需下载识别模型（约 150 MB），组件已随包安装';
+  const stt = v.stt_backend || 'whisper';
+  const sttOpt = (v.stt_opts || []).find(o => o.id === stt) || {};
+  $('#stt-name').textContent = v.stt_zh || sttOpt.name || '—';
+  $('#stt-tag').textContent = sttOpt.tag || '';
+  $('#stt-tag').style.display = sttOpt.tag ? '' : 'none';
+  const cloudModel = !!v.stt_model;
+  $('#stt-hint').textContent = cloudModel ? '' : (v.stt_hint || (stt === 'whisper' ? '语音不出本机，模型约 150 MB' : ''));
+  $('#stt-hint').hidden = cloudModel;
+  $('#stt-model').textContent = v.stt_model || '';
+  $('#stt-model').hidden = !cloudModel;
+  renderVoiceMenu($('#stt-menu'), v.stt_opts, '教练、识别、播报可以各用一家；用到同一家就共用 Key。');
+
+  // pill + switch
+  let askPill, askDis = !!v.ask_blocked;
+  if (stt === 'whisper' && downloading) {
+    askPill = '<span class="spin-s"></span>下载模型中';
+    $('#ask-pill').className = 'pill mute';
+  } else if (stt === 'whisper' && dlErr && !modelReady) {
+    askPill = '<span class="dot err"></span>模型下载失败';
+    $('#ask-pill').className = 'pill err';
+  } else if (stt === 'whisper' && !whReady) {
+    askPill = '<span class="dot warn"></span>缺少本地识别组件';
+    $('#ask-pill').className = 'pill warn';
+    askDis = true;
+  } else if (v.stt_key && !v.stt_key.configured) {
+    askPill = '<span class="dot warn"></span>还没配 Key';
+    $('#ask-pill').className = 'pill warn';
+    askDis = true;
+  } else if (v.ask_on) {
+    askPill = '<span class="dot ok"></span>已开启';
+    $('#ask-pill').className = 'pill ok';
   } else {
-    tag($('#tag-local'), v.stt_default === 'local' ? def : '');
-    tag($('#tag-cloud'), v.stt_default === 'cloud' ? def : (v.cloud_key_ready ? '' : '<span class="pill warn" style="height:18px;font-size:10px">需要 Key</span>'));
-    $('#d-local').textContent = '离线可用，首次下载约 150 MB';
+    askPill = '未开启';
+    $('#ask-pill').className = 'pill mute';
   }
-  $('#d-cloud').textContent = v.cloud_share_zh || (k.has_stt ? '和教练用同一个 Key' : `${k.provider_short} 不带识别，请配硅基流动或阶跃 Key`);
-  // Poll download progress
+  $('#ask-pill').innerHTML = askPill;
+  const swAsk = $('#sw-ask');
+  swAsk.classList.toggle('on', !!v.ask_on && !askDis);
+  swAsk.classList.toggle('dis', askDis);
+  swAsk.setAttribute('aria-disabled', String(askDis));
+  swAsk.title = askDis ? '先把下面的问题解决' : '';
+  $('#ask-ico').style.color = v.ask_on ? 'var(--info)' : 'var(--text-3)';
+  $('#ask-ico use').setAttribute('href', v.ask_on ? '#mic' : '#mic-off');
+
+  // 识别模型 / Key rows
+  const mv = $('#stt-model-v');
+  const keyRow = $('#stt-key-row');
+  if (stt === 'whisper') {
+    keyRow.hidden = true;
+    $('#stt-model-row').hidden = false;
+    if (!whReady) {
+      mv.innerHTML = `<div class="field warnf nowrap" style="width:300px"><svg class="ico" style="width:15px;height:15px"><use href="#alert"/></svg><b style="font-size:13px">缺少本地识别组件</b><span style="font-size:12px;color:var(--text-3)">· 安装包没带 Whisper</span></div>`
+        + `<span class="hint" style="margin-left:auto;text-align:right;white-space:nowrap">换最新安装包即可恢复<br>或在上面改用硅基流动 / 阶跃</span>`;
+    } else if (downloading) {
+      const pct = dl.pct || 0;
+      const mb = ((dl.bytes_done || 0) / 1048576).toFixed(0) + ' / ' + ((dl.bytes_total || 148 * 1048576) / 1048576).toFixed(0) + ' MB';
+      mv.innerHTML = `<div class="dlwrap"><div class="dlbar"><i style="width:${pct}%"></i></div><div class="dlmeta"><span class="num">${pct}%</span><span>·</span><span class="num">${mb}</span><span class="hint" style="margin-left:10px">下载时可以先打字提问</span></div></div>`
+        + `<span class="btn ghost sm" id="btn-dl-cancel">取消</span>`;
+    } else if (dlErr || (!modelReady && v.ask_on)) {
+      if (dlErr) {
+        mv.innerHTML = `<div class="callout err" style="padding:8px 12px"><svg class="ico" style="width:16px;height:16px"><use href="#alert"/></svg><div><div class="t" style="font-size:13px">模型下载失败</div><div class="d" style="margin:0">检查网络后重试；这段时间可以先打字提问，或换成硅基流动 / 阶跃。</div></div><div class="acts"><span class="btn primary sm" id="btn-dl-retry"><svg class="ico" style="width:14px;height:14px"><use href="#refresh"/></svg>重试</span></div></div>`;
+      } else {
+        mv.innerHTML = `<span class="pill mute">未下载</span><span class="t2 nowrap">开启后下载 · 约 150 MB</span><span class="btn ghost sm" id="btn-dl-retry">现在下载</span>`;
+      }
+    } else if (!modelReady) {
+      mv.innerHTML = `<span class="pill mute">未下载</span><span class="t2 nowrap">开启后下载 · 约 150 MB</span>`;
+    } else {
+      const mb = ((dl.bytes_total || 148 * 1048576) / 1048576).toFixed(0);
+      mv.innerHTML = `<span class="pill ok"><span class="dot ok"></span>已下载</span><span class="t2 nowrap">${mb} MB · 离线可用</span>`;
+    }
+  } else {
+    $('#stt-model-row').hidden = true;
+    keyRow.hidden = false;
+    $('#stt-key-v').innerHTML = kreuseHtml(v.stt_key, 'stt');
+  }
+
+  // —— 播报 ——
+  const missTts = v.tts_available === false && (v.tts_backend || 'edge') === 'edge';
+  document.documentElement.classList.toggle('st-tts-missing', missTts);
+  const tts = v.tts_backend || 'edge';
+  const ttsOpt = (v.tts_opts || []).find(o => o.id === tts) || {};
+  $('#tts-name').textContent = v.tts_zh || ttsOpt.name || '—';
+  $('#tts-tag').textContent = ttsOpt.tag || '';
+  $('#tts-tag').style.display = ttsOpt.tag ? '' : 'none';
+  $('#tts-hint').textContent = v.tts_hint || (tts === 'edge' ? '免费，需要联网' : '');
+  $('#tts-hint').hidden = !!v.tts_model;
+  $('#tts-model').textContent = v.tts_model || '';
+  $('#tts-model').hidden = !v.tts_model;
+  renderVoiceMenu($('#tts-menu'), v.tts_opts, '换服务商后，下面的声音列表跟着换。');
+
+  let ttsPill, ttsDis = !!v.tts_blocked;
+  if (missTts) {
+    ttsPill = '<span class="dot warn"></span>缺少声音组件';
+    $('#tts-pill').className = 'pill warn tts-ok';
+    ttsDis = true;
+  } else if (v.tts_key && !v.tts_key.configured) {
+    ttsPill = '<span class="dot warn"></span>还没配 Key';
+    $('#tts-pill').className = 'pill warn tts-ok';
+    ttsDis = true;
+  } else if (v.tts_on) {
+    ttsPill = '<span class="dot ok"></span>已开启';
+    $('#tts-pill').className = 'pill ok tts-ok';
+  } else {
+    ttsPill = '未开启';
+    $('#tts-pill').className = 'pill mute tts-ok';
+  }
+  $('#tts-pill').innerHTML = ttsPill;
+  const swT = $('#sw-tts');
+  swT.classList.toggle('on', !!v.tts_on && !ttsDis);
+  swT.classList.toggle('dis', ttsDis);
+  swT.setAttribute('aria-disabled', String(ttsDis));
+  swT.title = ttsDis ? '先把下面的问题解决' : '';
+
+  const ttsKeyRow = $('#tts-key-row');
+  if (v.tts_key) {
+    ttsKeyRow.hidden = false;
+    $('#tts-key-v').innerHTML = kreuseHtml(v.tts_key, 'tts');
+  } else {
+    ttsKeyRow.hidden = true;
+  }
+
+  // 声音 dropdown
+  const voices = v.tts_voices || [];
+  const voiceBlocked = !!(v.tts_key && !v.tts_key.configured);
+  const ddVoice = $('#dd-voice');
+  ddVoice.classList.toggle('dis', voiceBlocked);
+  if (voiceBlocked) {
+    $('#voice-name').innerHTML = `<span class="ph">${esc(v.tts_voice_zh || '')}</span>`;
+    ddVoice.title = `配好 Key 后可选${(v.tts_key && v.tts_key.provider_name) || ''}的声音`;
+  } else {
+    ddVoice.title = '';
+    $('#voice-name').textContent = v.tts_voice_zh || '—';
+  }
+  $('#voice-menu').innerHTML = voices.map(x =>
+    `<div class="mi${x.id === v.tts_voice ? ' cur' : ''}" role="option" data-v="${esc(x.id)}">${CK}<div><div class="nm">${esc(x.name)}</div></div></div>`
+  ).join('');
+  const prevOk = !!v.preview_ok && !missTts && !voiceBlocked;
+  const bp = $('#btn-preview');
+  bp.classList.toggle('off', !prevOk);
+  bp.setAttribute('aria-disabled', String(!prevOk));
+  bp.title = prevOk ? '' : (v.preview_off_zh || '试听不可用');
+  const ph = $('#preview-hint');
+  if (!prevOk && v.preview_off_zh && !missTts) {
+    ph.hidden = false; ph.textContent = v.preview_off_zh;
+  } else { ph.hidden = true; }
+
+  // snav warn dot: coach OR voice missing key / component / download fail
+  // 识别默认关不算黄点：只在用户开过识别时把识别的问题算进来
+  const voiceWarn = (v.stt_enabled && (askDis || (stt === 'whisper' && dlErr))) || ttsDis;
+  const dot = $('#snav-coach-dot');
+  if (dot && !fill) {
+    // renderCoachKs also touches this; OR in voice warn
+    if (voiceWarn && dot.style.display === 'none') {
+      dot.style.display = '';
+      if (!dot.className.includes('err')) dot.className = 'dot warn';
+    }
+  }
+
   if (downloading) {
     clearTimeout(dlTimer);
     dlTimer = setTimeout(async () => { try { await refresh(); } catch (_) {} }, 800);
@@ -388,7 +553,9 @@ async function saveKey() {
   const inp = $('#key-in');
   if (busy) return;
   if (!inp.value.trim()) { toast('先把 Key 粘贴进来', { icon: 'info' }); inp.focus(); return; }
-  const pid = S.key.provider;
+  // 去填 Key：存那一家的 Key，不改教练服务商；成功后自动滚回语音卡
+  const fill = S.voice && S.voice.key_fill;
+  const pid = fill ? fill.provider : S.key.provider;
   busy = 'save'; saveErr = ''; localTest = null; renderCoachKs();
   let r;
   try { r = await withTimeout(api().save_key(pid, inp.value), TEST_WAIT_MS); }
@@ -397,8 +564,16 @@ async function saveKey() {
   busy = null;
   if (r.timeout) localTest = { ...TIMEOUT };
   else if (r.saved === false) saveErr = r.reason_zh || '没能保存，详情见日志';
-  else { changing = false; flashSaved(); if (r.msg) toast(r.msg, { icon: 'alert' }); }
+  else { changing = false; flashSaved(); if (r.msg && !r.fill_only) toast(r.msg, { icon: 'alert' }); }
   await refresh();
+  if (r && r.fill_only && r.ok) {
+    jumpBack = r.back === 'tts' ? 'tts' : 'stt';
+    clearTimeout(jumpBackT);
+    jumpBackT = setTimeout(() => { jumpBack = null; refresh(); }, 4000);
+    renderVoice(S);
+    const c = $(jumpBack === 'tts' ? '#c-tts' : '#c-stt');
+    c.scrollIntoView({ block: 'nearest', behavior: S.ui && S.ui.reduce_motion ? 'auto' : 'smooth' });
+  }
   if (r.timeout && !S.key.configured) { localTest = null; saveErr = '等了 20 秒还没有回应'; renderCoachKs(); }
 }
 
@@ -412,6 +587,7 @@ function resetKeyInput() { $('#key-in').value = ''; setEye(false); saveErr = '';
 // 选中即生效：写服务商和默认模型，热重载，没有确认框。
 // 换到有 Key 的一家马上显示“测试中”，停手 0.4 秒后只测最后选中的那一家。
 async function pickProvider(id) {
+  if (S.voice && S.voice.key_fill) return toast('正在给语音填 Key，服务商已锁定；保存后会自动回去', { icon: 'info' });
   if (busy === 'save' || customBusy) return toast('正在保存 Key，等一下再换', { icon: 'info' });
   if (id === '__add_custom__') { openCustomForm(''); return; }
   // Leaving the custom form
@@ -558,33 +734,95 @@ onReady(async () => {
     } else if (!(await api()[act]())) toast('没能打开文件夹，详情见日志', { icon: 'alert' });
   });
   wireCoach();
-  // voice
+  // voice (D13 dropdowns)
   const noTts = () => toast('缺少声音组件，提醒照常显示，只是不念出来。换最新安装包即可恢复', { icon: 'alert' });
+  function closeVoiceMenus() {
+    ['stt-menu', 'tts-menu', 'voice-menu'].forEach(id => { const m = $('#' + id); if (m) m.hidden = true; });
+    ['dd-stt', 'dd-tts', 'dd-voice'].forEach(id => { const d = $('#' + id); if (d) { d.classList.remove('open'); d.setAttribute('aria-expanded', 'false'); } });
+  }
+  function wireDd(ddId, menuId, onPick) {
+    const dd = $('#' + ddId), menu = $('#' + menuId);
+    if (!dd || !menu) return;
+    dd.onclick = (e) => {
+      if (dd.classList.contains('dis')) return;
+      e.stopPropagation();
+      const open = menu.hidden;
+      closeVoiceMenus();
+      if (open) { menu.hidden = false; dd.classList.add('open'); dd.setAttribute('aria-expanded', 'true'); }
+    };
+    menu.onclick = async (e) => {
+      const mi = e.target.closest('.mi'); if (!mi || !mi.dataset.v) return;
+      closeVoiceMenus();
+      await onPick(mi.dataset.v);
+    };
+  }
+  document.addEventListener('click', closeVoiceMenus);
+  wireDd('dd-stt', 'stt-menu', async (id) => {
+    const r = await save({ stt_backend: id });
+    if (r && r.need_key) { /* UI already shows 去填 Key */ }
+  });
+  wireDd('dd-tts', 'tts-menu', async (id) => { await save({ tts_backend: id }); });
+  wireDd('dd-voice', 'voice-menu', async (id) => {
+    const r = await api().set_tts_voice(id);
+    if (r && r.msg) toast(r.msg, { icon: 'alert' }); else flashSaved();
+    await refresh();
+  });
   $('#sw-tts').onclick = async () => {
-    if (S.voice.tts_available === false) return noTts();
-    const r = await api().set_tts(!S.voice.tts_on); if (r.msg) toast(r.msg, { icon: 'alert' }); else flashSaved(); refresh();
+    if ($('#sw-tts').classList.contains('dis')) {
+      if (S.voice.tts_available === false && (S.voice.tts_backend || 'edge') === 'edge') return noTts();
+      if (S.voice.tts_key && !S.voice.tts_key.configured) return toast('先点「去填 Key」保存 Key', { icon: 'alert' });
+      return;
+    }
+    const r = await api().set_tts(!S.voice.tts_on);
+    if (r && r.msg) toast(r.msg, { icon: 'alert' }); else flashSaved();
+    await refresh();
   };
   $('#btn-preview-off').onclick = noTts;
   $('#btn-preview').onclick = async () => {
+    if ($('#btn-preview').classList.contains('off')) {
+      toast((S.voice && S.voice.preview_off_zh) || '试听不可用', { icon: 'info' });
+      return;
+    }
     const b = $('#btn-preview'); if (b.classList.contains('busy')) return;
     b.classList.add('busy');
     try { const r = await api().preview_tts(); if (!r || !r.ok) toast((r && r.msg) || '试听失败，详情见日志', { icon: 'alert' }); }
     catch (e) { toast('试听失败，详情见日志', { icon: 'alert' }); }
     finally { b.classList.remove('busy'); }
   };
-  $('#sw-ask').onclick = () => save({ voice_ask: !S.voice.ask_on });
-  document.querySelectorAll('.opt').forEach(o => o.onclick = async () => {
-    if (!S.voice.ask_on) return;
-    if (o.dataset.m === 'local' && !S.voice.whisper_ready) {
-      toast('缺少本地识别组件', { icon: 'info' }); // only if truly missing package; download UI handles first-use
+  $('#sw-ask').onclick = async () => {
+    if ($('#sw-ask').classList.contains('dis')) {
+      if (S.voice.stt_key && !S.voice.stt_key.configured) return toast('先点「去填 Key」保存 Key', { icon: 'alert' });
+      if (!S.voice.whisper_ready) return toast('缺少本地识别组件', { icon: 'info' });
       return;
     }
-    if (o.dataset.m === 'local' && S.voice.whisper_ready && !(S.voice.whisper_model_ready)) {
+    const turningOn = !S.voice.ask_on;
+    if (turningOn && S.voice.stt_backend === 'whisper' && S.voice.whisper_ready && !S.voice.whisper_model_ready) {
       await api().start_whisper_download();
     }
-    await save({ stt_mode: o.dataset.m });
+    await save({ voice_ask: turningOn });
+  };
+  // 去填 Key → (delegated)
+  document.getElementById('p-coach').addEventListener('click', async (e) => {
+    const go = e.target.closest('[data-fill]');
+    if (!go) {
+      const cancel = e.target.closest('#btn-dl-cancel');
+      const retry = e.target.closest('#btn-dl-retry');
+      if (cancel) { await api().cancel_whisper_download(); refresh(); return; }
+      if (retry) { await api().start_whisper_download(); refresh(); return; }
+      return;
+    }
+    const pid = go.dataset.fill, purpose = go.dataset.purpose || 'stt';
+    const r = await api().begin_key_fill(pid, purpose);
+    if (!r || !r.ok) { toast((r && r.msg) || '打不开填 Key', { icon: 'alert' }); return; }
+    changing = true; // show password row
+    $('#key-in').value = '';
+    await refresh();
+    const c = $('#c-coach');
+    c.scrollIntoView({ block: 'start' });
+    c.classList.remove('flash'); void c.offsetWidth; c.classList.add('flash');
+    setTimeout(() => { try { $('#key-in').focus(); } catch (_) {} }, 50);
   });
-  $('#btn-hotkey').onclick = () => { if (S.voice.ask_on) toast('全局快捷键还在做，先点麦克风提问'); };
+  $('#btn-hotkey').onclick = () => toast('全局快捷键还在做，先点麦克风提问');
   // overlay & motion
   $('#btn-ovpos').onclick = async () => toast((await api().reset_overlay_pos()) ? '小窗已回到默认位置' : '小窗还没打开，进对局后再试');
   $('#sw-auto').onclick = () => save({ auto_overlay: !S.ui.auto_overlay });

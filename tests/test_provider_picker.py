@@ -296,8 +296,14 @@ def world(tmp_path, monkeypatch):
     svc.provider_id, svc.provider_name = pid, pname
     svc.coach = CoachAgent(api_key=key, base_url=url, model=model, provider_id=pid, provider_name=pname)
     svc.stt_backend, svc.tts_backend, svc.tts_voice = "mock", "edge", ""
+    svc.stt_model = svc.tts_model = ""
     svc.voice_calls = []
-    svc.reload_voice = lambda **kw: (svc.voice_calls.append(kw), setattr(svc, "stt_backend", kw.get("stt_backend", svc.stt_backend)))
+    def _rv(**kw):
+        svc.voice_calls.append(kw)
+        if "stt_backend" in kw: svc.stt_backend = kw["stt_backend"]
+        if "tts_backend" in kw: svc.tts_backend = kw["tts_backend"]
+        if "tts_voice" in kw: svc.tts_voice = kw["tts_voice"]
+    svc.reload_voice = _rv
 
     b = Bridge.__new__(Bridge)
     b._svc = svc
@@ -306,6 +312,9 @@ def world(tmp_path, monkeypatch):
     b._ui_path = cfgdir / "settings.yaml"
     b.ui = st.load(b._ui_path)
     b._last_test, b._coach_err = {}, {}
+    b._key_fill = None
+    b._tts_ok = None
+    b._voice_pref = {"stt_model": "", "tts_model": "", "tts_voice": ""}
     b._icons = SimpleNamespace(root=tmp_path / "icons")
     svc.snapshot = lambda: SimpleNamespace(updated_at=None)
     svc.gsi = SimpleNamespace(host="127.0.0.1", port=3000, auth_token="t")
@@ -460,30 +469,36 @@ def test_settings_state_never_contains_key_material(world):
     assert "customs" in s
 
 
-# ── voice follows the provider ───────────────────────────
-def test_stt_default_follows_provider_but_not_user_choice(world, monkeypatch):
-    b = world.b
-    b.reload_env()
-    assert b.settings_state()["voice"]["stt_default"] == "cloud"  # StepFun shares its key
-    b.set_provider("deepseek")
-    v = b.settings_state()["voice"]
-    assert v["stt_default"] == "local" and v["stt_mode"] == "local"
-    # a mode the user picked by hand survives a switch
-    b.ui["stt_mode"] = "cloud"
-    b.set_provider("stepfun_plan")
-    b.set_provider("openai")
-    assert b.ui["stt_mode"] == "cloud" and b.settings_state()["voice"]["stt_mode"] == "cloud"
+# ── voice independent of the coach (PM D13) ──────────────
+def test_voice_backends_independent_of_coach(world, monkeypatch):
+    """Coach A / STT B / TTS C: switching coach never rewrites voice.*."""
+    from dodoclaw import config
 
-
-def test_voice_on_following_provider_is_reapplied(world, monkeypatch):
     b, svc = world.b, world.svc
     b.reload_env()
-    b.ui["voice_ask"], b.ui["stt_mode"] = True, None
-    monkeypatch.setattr("importlib.util.find_spec", lambda name, *a: object())
-    b.set_provider("stepfun")
-    assert svc.voice_calls[-1] == {"stt_backend": "stepfun"}
+    monkeypatch.setattr("dodoclaw.webui.whisper_model.component_available", lambda: True)
+    # pick siliconflow STT while coach stays stepfun_plan (has step key, not sf)
+    r = b.save_settings({"stt_backend": "siliconflow"})
+    assert r["ok"] and r.get("need_key") == "siliconflow"  # no SF key yet
+    text = world.yaml.read_text(encoding="utf-8")
+    assert 'stt_backend: "siliconflow"' in text
+    # coach switch must not touch voice.stt_backend
     b.set_provider("deepseek")
-    assert svc.voice_calls[-1] == {"stt_backend": "whisper"}
+    assert 'stt_backend: "siliconflow"' in world.yaml.read_text(encoding="utf-8")
+    v = b.settings_state()["voice"]
+    assert v["stt_backend"] == "siliconflow" and v["stt_key"]["configured"] is False
+
+
+def test_voice_ask_default_off_no_auto_stt(world, monkeypatch):
+    b, svc = world.b, world.svc
+    b.reload_env()
+    b._key_fill = None
+    assert b.ui.get("voice_ask") in (False, None) or b.settings_state()["voice"]["ask_on"] is False
+    # turning ask on with stepfun key applies stepfun (or whisper default)
+    monkeypatch.setattr("dodoclaw.webui.whisper_model.component_available", lambda: True)
+    b.save_settings({"stt_backend": "whisper"})
+    r = b.save_settings({"voice_ask": True})
+    assert r["ok"] and svc.stt_backend == "whisper"
 
 
 # ── 缺少声音组件 (README D10 #coach,tts-missing) ──────────
@@ -596,3 +611,30 @@ def test_stale_test_from_before_a_switch_is_not_recorded(world, monkeypatch):
     b.set_provider("stepfun_plan")
     r = b.test_key()
     assert "stale" not in r and b.settings_state()["key"]["last_test"]["ok"] is True
+
+
+# ── D13 去填 Key / voice state ───────────────────────────
+def test_key_fill_saves_without_switching_coach(world, monkeypatch):
+    b, svc = world.b, world.svc
+    b.reload_env()
+    assert svc.provider_id == "stepfun_plan"
+    r = b.begin_key_fill("siliconflow", "stt")
+    assert r["ok"] and r["fill_name"].endswith("只填 Key")
+    # save_key for siliconflow while coach stays stepfun_plan
+    out = b.save_key("siliconflow", "sk-sf-test-KEY-zzzz")
+    assert out["ok"] and out.get("fill_only") is True and out.get("back") == "stt"
+    assert svc.provider_id == "stepfun_plan"  # coach unchanged
+    assert b._key_fill is None
+    flags = __import__("dodoclaw.webui.keycheck", fromlist=["env_flags"]).env_flags()
+    assert flags.get("SILICONFLOW_API_KEY") is True
+
+
+def test_settings_state_voice_shape(world, monkeypatch):
+    monkeypatch.setattr("dodoclaw.webui.whisper_model.component_available", lambda: True)
+    monkeypatch.setattr("importlib.util.find_spec", lambda name, *a: object())
+    v = world.b.settings_state()["voice"]
+    assert v["stt_backend"] in ("whisper", "siliconflow", "stepfun")
+    assert v["tts_backend"] in ("edge", "stepfun", "siliconflow")
+    assert isinstance(v["stt_opts"], list) and {o["id"] for o in v["stt_opts"]} >= {"whisper", "siliconflow", "stepfun"}
+    assert {o["id"] for o in v["tts_opts"]} >= {"edge", "stepfun", "siliconflow"}
+    assert "ask_on" in v and "tts_on" in v

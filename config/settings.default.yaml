@@ -55,11 +55,12 @@ reminders:
   cooldown_sec: 25
 
 voice:
-  # ASR: mock | whisper | stepfun_plan | stepfun
-  stt_backend: "mock"
+  # 设置页「语音提问」「语音播报」里选的就写在这里（开关另存在 ui:）
+  # ASR: whisper | siliconflow | stepfun_plan | stepfun | mock
+  stt_backend: "whisper"
   # stt_model: "stepaudio-2.5-asr"
-  # TTS: mock | edge | stepfun_plan | stepfun
-  tts_backend: "mock"
+  # TTS: edge | stepfun_plan | stepfun | mock
+  tts_backend: "edge"
   # tts_model: "stepaudio-2.5-tts"
   # tts_voice: "cixingnansheng"
   sample_rate: 16000

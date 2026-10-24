@@ -87,12 +87,13 @@
 #key-res{min-width:0}
 .env-body{display:none;padding:8px 0 2px 22px}.env-body.open{display:block}
 .envl{display:flex;align-items:center;gap:10px;font-size:12.5px;white-space:nowrap}.envl+.envl{margin-top:8px}
-/* 缺少声音组件（README D10 #coach,tts-missing） */
+/* D13 播报缺组件：由 JS 切 .tts-ok / .tts-miss（edge 缺包时） */
 html:not(.st-tts-missing) .tts-miss,html.st-tts-missing .tts-ok{display:none!important}
-#tts-name .tn{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
-/* 语音提问关闭时：识别方式与快捷键不可用 */
-#c-voice.ask-off .opt{opacity:.5;pointer-events:none}
-#c-voice.ask-off .hk{opacity:.5;pointer-events:none;filter:grayscale(1)}
+#btn-preview.off,[disabled].btn{opacity:.5;cursor:not-allowed;pointer-events:none}
+.savedflash{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:700;color:var(--ok);white-space:nowrap}
+.savedflash .ico{width:14px;height:14px;stroke-width:2.6}
+.vcard.jb{border-color:rgba(63,220,151,.45);box-shadow:0 0 0 3px rgba(63,220,151,.12)}
+#c-coach.fill-key .fv-note{display:inline!important}
 /* 可复制路径 */
 .mono.copyable{cursor:copy}.mono.copyable:hover{border-color:var(--line-2);color:var(--text)}
 .saved{opacity:0;transition:opacity var(--dur-2)}.saved.on{opacity:1}
@@ -203,14 +204,16 @@ a.link{text-decoration:none}
 
  <!-- ===== 教练与语音 ===== -->
  <section class="glass pane" id="p-coach">
-  <div class="ptop"><div><div class="ph1">教练与语音</div><div class="sub">选服务商、粘贴 Key，点“保存并测试”就能用。Key 只保存在这台电脑上，不会显示出来。</div></div><span class="saved"><svg class="ico"><use href="#check"/></svg>已保存</span></div>
+  <div class="ptop"><div><div class="ph1">教练与语音</div><div class="sub">教练、识别、播报各选各的服务商。Key 在“AI 教练”里填，只保存在这台电脑上，不会显示出来。</div></div><span class="saved"><svg class="ico"><use href="#check"/></svg>已保存</span></div>
   <div class="card" id="c-coach" data-ks="none">
+   <div class="callout info fromv" id="fromv" style="padding:8px 12px;margin-bottom:10px"><svg class="ico" style="width:16px;height:16px"><use href="#info"/></svg><div class="d" style="margin:0" id="fromv-txt">—</div></div>
    <div class="ch"><span class="gl gi" style="background:rgba(229,72,47,.12);color:var(--brand-2)"><svg class="ico"><use href="#chat"/></svg></span><div><div class="t">AI 教练</div><div class="d">提问和赛后建议要用；不配也能用全部提醒</div></div><div class="r" id="coach-pill"></div></div>
    <div style="margin-top:10px">
     <!-- 服务商：选中即写 settings.yaml 的 coach.provider + coach.model，马上生效 -->
     <div class="row" style="position:relative"><span class="k">服务商</span><div class="v">
      <div class="field dd" id="dd-prov" style="width:280px" tabindex="0" role="button" aria-haspopup="listbox" aria-expanded="false"><span id="prov-name" style="white-space:nowrap">—</span><span id="prov-tag"></span><svg class="ico caret" style="width:14px;height:14px;margin-left:auto"><use href="#down"/></svg></div>
      <span class="hint" id="prov-model" title="每家用默认模型，一般不用改"></span>
+     <span class="hint nowrap fv-note" id="fv-note" style="display:none">这里只存 Key，教练服务商不会改</span>
      <span class="link" id="btn-apply" style="margin-left:auto;font-size:12px;flex:none"></span>
     </div>
      <div class="ddmenu" id="prov-menu" role="listbox" aria-label="服务商" style="left:144px;top:46px" hidden></div>
@@ -277,19 +280,51 @@ a.link{text-decoration:none}
     </div>
    </div>
   </div>
-  <div class="card" id="c-tts">
-   <div class="ch"><span class="gl gi tts-ok"><svg class="ico"><use href="#vol"/></svg></span><span class="gl gi tts-miss" style="background:rgba(255,190,85,.1);color:var(--warn)"><svg class="ico"><use href="#vol-off"/></svg></span><div><div class="t">语音播报（TTS）</div><div class="d">提醒和回答念出来；Edge 免费声音不需要 Key</div></div><div class="r"><span class="pill tts-ok" id="tts-pill"></span><span class="pill warn tts-miss"><span class="dot warn"></span>缺少声音组件</span><i class="sw" id="sw-tts" role="switch"></i></div></div>
+  <!-- D13：语音识别 / 语音播报 各选各的服务商（Key 复用教练里存的，不另开 Key） -->
+  <div class="card vcard" id="c-stt">
+   <div class="ch">
+    <span class="gl gi" id="ask-ico" style="background:rgba(98,168,255,.12);color:var(--info)"><svg class="ico"><use href="#mic"/></svg></span>
+    <div><div class="t">语音识别</div><div class="d">按住快捷键说话提问；可以和教练、播报用不同的服务商</div></div>
+    <div class="r"><span class="pill mute" id="ask-pill">未开启</span><i class="sw" id="sw-ask" role="switch"></i></div>
+   </div>
    <div style="margin-top:8px">
-    <div class="row tts-ok"><span class="k">声音</span><div class="v"><div class="field" style="width:280px" id="tts-name">—</div><span class="btn ghost sm" id="btn-preview"><svg class="ico" style="width:14px;height:14px"><use href="#vol"/></svg>试听</span></div></div>
-    <div class="row tts-miss"><span class="k">声音</span><div class="v"><div class="field warnf" style="width:280px;white-space:nowrap" title="这个版本没打包 Edge TTS"><svg class="ico" style="width:15px;height:15px"><use href="#alert"/></svg><b style="font-size:13px">缺少声音组件</b><span style="font-size:12px;color:var(--text-3)">· 没打包 Edge TTS</span></div><span class="btn ghost sm off" id="btn-preview-off" aria-disabled="true" title="缺少声音组件，试听不了"><svg class="ico" style="width:14px;height:14px"><use href="#vol"/></svg>试听</span><span class="hint" style="margin-left:auto;text-align:right;white-space:nowrap">提醒照常显示，只是不念出来<br>换最新安装包即可恢复</span></div></div>
+    <div class="row" style="position:relative"><span class="k">服务商</span><div class="v">
+     <div class="field dd" id="dd-stt" style="width:300px" tabindex="0" role="button" aria-haspopup="listbox" aria-expanded="false"><span id="stt-name">—</span><span class="pill mute tiny" id="stt-tag"></span><svg class="ico caret" style="width:14px;height:14px;margin-left:auto"><use href="#down"/></svg></div>
+     <span class="hint nowrap" id="stt-hint"></span>
+     <span class="mono" id="stt-model" style="flex:none" hidden title="识别模型，固定"></span>
+    </div>
+     <div class="ddmenu" id="stt-menu" role="listbox" aria-label="识别服务商" style="left:144px;top:46px" hidden></div>
+    </div>
+    <div class="row" id="stt-model-row"><span class="k">识别模型</span><div class="v" id="stt-model-v"></div></div>
+    <div class="row" id="stt-key-row" hidden><span class="k">Key</span><div class="v" id="stt-key-v"></div></div>
+    <div class="row"><span class="k">按住说话</span><div class="v"><div class="field" style="width:200px;height:32px"><span class="ph">未设置</span><span class="link" id="btn-hotkey" style="margin-left:auto;font-size:12px">设置</span></div><span class="hint nowrap">全局快捷键，对局中按住说话</span></div></div>
    </div>
   </div>
-  <div class="card" id="c-voice">
-   <div class="ch"><span class="gl gi" id="ask-ico" style="background:rgba(255,255,255,.05);color:var(--text-3)"><svg class="ico"><use href="#mic-off"/></svg></span><div><div class="t">语音提问（语音识别）</div><div class="d">默认关闭。教练服务商自带识别（如阶跃）时默认云端识别、共用 Key；不带（如 DeepSeek）默认本地 Whisper</div></div><div class="r"><span class="pill mute" id="ask-pill">未配置语音识别</span><i class="sw" id="sw-ask"></i></div></div>
-   <div style="display:flex;gap:10px;margin-top:12px">
-    <div class="opt" id="opt-local" data-m="local"><div class="t"><svg class="ico" style="width:15px;height:15px;color:var(--ok)"><use href="#folder"/></svg>本地 Whisper<span class="tag" id="tag-local"></span></div><div class="d" id="d-local">离线可用，首次下载约 150 MB</div><div class="miss" id="local-miss" hidden><svg class="ico"><use href="#alert"/></svg>缺少本地识别组件</div><div id="local-dl" hidden><div class="dlbar"><i id="dl-bar" style="width:0%"></i></div><div class="dlmeta"><span class="num" id="dl-pct">0%</span><span>·</span><span id="dl-meta">准备下载</span><span class="link" id="btn-dl-cancel" style="margin-left:auto;font-size:12px">取消</span><span class="link" id="btn-dl-retry" style="margin-left:auto;font-size:12px" hidden>重试</span></div></div></div>
-    <div class="opt" id="opt-cloud" data-m="cloud"><div class="t"><svg class="ico" style="width:15px;height:15px;color:var(--info)"><use href="#spark"/></svg>云端识别<span class="tag" id="tag-cloud"></span></div><div class="d" id="d-cloud">—</div></div>
-    <div class="hk" style="display:flex;flex-direction:column;justify-content:center;gap:6px;width:170px"><span class="hint">全局按住说话快捷键</span><div class="field" style="height:32px"><span class="ph">未设置</span><span class="link" id="btn-hotkey" style="margin-left:auto;font-size:12px">设置</span></div></div>
+
+  <div class="card vcard" id="c-tts">
+   <div class="ch">
+    <span class="gl gi tts-ok" id="tts-ico"><svg class="ico"><use href="#vol"/></svg></span>
+    <span class="gl gi tts-miss" style="background:rgba(255,190,85,.1);color:var(--warn)"><svg class="ico"><use href="#vol-off"/></svg></span>
+    <div><div class="t">语音播报</div><div class="d">把提醒和回答念出来</div></div>
+    <div class="r"><span class="pill mute tts-ok" id="tts-pill">未开启</span><span class="pill warn tts-miss"><span class="dot warn"></span>缺少声音组件</span><i class="sw" id="sw-tts" role="switch"></i></div>
+   </div>
+   <div style="margin-top:8px">
+    <div class="row" style="position:relative"><span class="k">服务商</span><div class="v">
+     <div class="field dd" id="dd-tts" style="width:300px" tabindex="0" role="button" aria-haspopup="listbox" aria-expanded="false"><span id="tts-name">—</span><span class="pill mute tiny" id="tts-tag"></span><svg class="ico caret" style="width:14px;height:14px;margin-left:auto"><use href="#down"/></svg></div>
+     <span class="hint nowrap" id="tts-hint"></span>
+     <span class="mono" id="tts-model" style="flex:none" hidden title="播报模型，固定"></span>
+    </div>
+     <div class="ddmenu" id="tts-menu" role="listbox" aria-label="播报服务商" style="left:144px;top:46px" hidden></div>
+    </div>
+    <div class="row" id="tts-key-row" hidden><span class="k">Key</span><div class="v" id="tts-key-v"></div></div>
+    <div class="row tts-ok" id="tts-voice-row"><span class="k">声音</span><div class="v">
+     <div class="field dd" id="dd-voice" style="width:300px" tabindex="0" role="button"><span id="voice-name">—</span><svg class="ico caret" style="width:14px;height:14px;margin-left:auto"><use href="#down"/></svg></div>
+     <span class="btn ghost sm" id="btn-preview"><svg class="ico" style="width:14px;height:14px"><use href="#vol"/></svg>试听</span>
+     <span class="hint" id="preview-hint" hidden></span>
+    </div>
+     <div class="ddmenu" id="voice-menu" role="listbox" aria-label="声音" style="left:144px;top:46px" hidden></div>
+    </div>
+    <div class="row tts-miss"><span class="k">声音</span><div class="v"><div class="field warnf nowrap" style="width:300px" title="这个版本没打包 Edge TTS"><svg class="ico" style="width:15px;height:15px"><use href="#alert"/></svg><b style="font-size:13px">缺少声音组件</b><span style="font-size:12px;color:var(--text-3)">· 没打包 Edge TTS</span></div><span class="btn ghost sm" id="btn-preview-off" disabled title="缺少声音组件，试听不了"><svg class="ico" style="width:14px;height:14px"><use href="#vol"/></svg>试听</span><span class="hint" style="margin-left:auto;text-align:right;white-space:nowrap">提醒照常显示，只是不念出来<br>换最新安装包，或改用阶跃 / 硅基流动</span></div></div>
    </div>
   </div>
  </section>

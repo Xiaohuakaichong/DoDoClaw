@@ -134,6 +134,78 @@ class StepFunTTS(TextToSpeech):
                 pass
 
 
+
+class SiliconFlowTTS(TextToSpeech):
+    """SiliconFlow CosyVoice (OpenAI-compatible audio.speech).
+
+    POST https://api.siliconflow.cn/v1/audio/speech
+    model FunAudioLLM/CosyVoice2-0.5B; voice ``{model}:{name}`` (anna/bella/claire/diana).
+    """
+
+    def __init__(
+        self,
+        api_key: str,
+        base_url: str = "https://api.siliconflow.cn/v1",
+        model: str = "FunAudioLLM/CosyVoice2-0.5B",
+        voice: str = "anna",
+    ) -> None:
+        if not api_key:
+            raise RuntimeError("硅基流动 TTS 需要 API Key（SILICONFLOW_API_KEY）")
+        self.api_key = api_key
+        self.base_url = base_url.rstrip("/")
+        self.model = model or "FunAudioLLM/CosyVoice2-0.5B"
+        v = (voice or "anna").strip()
+        self.voice = v if ":" in v else f"{self.model}:{v}"
+
+    def speak(self, text: str) -> None:
+        if not (text or "").strip():
+            return
+        text = text.strip()
+        if len(text) > 900:
+            text = text[:899] + "…"
+
+        from openai import OpenAI
+
+        from dodoclaw.voice.audio_io import play_audio_file
+
+        client = OpenAI(api_key=self.api_key, base_url=self.base_url, timeout=45.0)
+        with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as tmp:
+            out = Path(tmp.name)
+        try:
+            try:
+                with client.audio.speech.with_streaming_response.create(
+                    model=self.model,
+                    voice=self.voice,
+                    input=text,
+                    response_format="mp3",
+                ) as response:
+                    response.stream_to_file(out)
+            except Exception:
+                logger.debug("siliconflow streaming speech failed; non-stream", exc_info=True)
+                response = client.audio.speech.create(
+                    model=self.model,
+                    voice=self.voice,
+                    input=text,
+                    response_format="mp3",
+                )
+                data = getattr(response, "content", None)
+                if data is None and hasattr(response, "read"):
+                    data = response.read()
+                if data is None and hasattr(response, "stream_to_file"):
+                    response.stream_to_file(out)
+                    data = b""
+                if data:
+                    out.write_bytes(data)
+            if out.stat().st_size < 32:
+                raise RuntimeError("TTS 返回空音频（检查模型/音色/额度）")
+            play_audio_file(out)
+        finally:
+            try:
+                out.unlink(missing_ok=True)
+            except OSError:
+                pass
+
+
 def create_tts(
     backend: str = "mock",
     *,
@@ -156,5 +228,12 @@ def create_tts(
             base_url=base_url or spec.base_url,
             model=model or spec.default_model,
             voice=voice or (spec.voices[0] if spec.voices else "cixingnansheng"),
+        )
+    if bid == "siliconflow":
+        return SiliconFlowTTS(
+            api_key=api_key,
+            base_url=base_url or spec.base_url,
+            model=model or spec.default_model,
+            voice=voice or (spec.voices[0] if spec.voices else "anna"),
         )
     raise ValueError(f"Unknown TTS backend: {backend}")
