@@ -1,0 +1,166 @@
+"""PRD D12: SiliconFlow in picker, custom OpenAI-compatible providers, URL/model validation."""
+
+from __future__ import annotations
+
+from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import MagicMock
+
+import pytest
+
+from dodoclaw.coach import errors
+from dodoclaw.webui import customs, keycheck, keystore
+from dodoclaw.webui.provider_validate import (
+    MSG_MODEL_SPACE,
+    MSG_URL_HTTP_PUBLIC,
+    MSG_URL_SCHEME,
+    normalize_base_url,
+    validate_model_id,
+)
+
+
+def test_picker_has_siliconflow_after_deepseek_and_add_custom():
+    rows = keycheck.list_providers("deepseek", False)
+    ids = [r["id"] for r in rows]
+    assert ids[0] == "deepseek"
+    assert ids[1] == "siliconflow"
+    assert ids[-1] == "__add_custom__"
+    sf = rows[1]
+    assert sf["name"] == "硅基流动"
+    assert "国内需代理" not in (sf["tag"] or "")
+    assert "api.siliconflow.cn" in (sf["subtitle"] or sf["base_url"])
+    assert rows[-1]["kind"] == "add_custom"
+
+
+def test_siliconflow_provider_spec():
+    from dodoclaw.providers import get_provider
+
+    p = get_provider("siliconflow")
+    assert p.base_url == "https://api.siliconflow.cn/v1"
+    assert p.key_url == "https://cloud.siliconflow.cn/account/ak"
+    assert p.name == "硅基流动"
+    assert "DeepSeek" in p.default_model or "Qwen" in p.default_model
+    assert "SiliconFlow" not in p.name  # no English in visible name
+
+
+@pytest.mark.parametrize(
+    "raw,ok,expect",
+    [
+        ("https://api.example.com/v1", True, "https://api.example.com/v1"),
+        ("https://api.example.com/v1/chat/completions", True, "https://api.example.com/v1"),
+        ("http://127.0.0.1:8000/v1/", True, "http://127.0.0.1:8000/v1"),
+        ("http://10.0.0.2/v1", True, "http://10.0.0.2/v1"),
+        ("http://api.example.com/v1", False, MSG_URL_HTTP_PUBLIC),
+        ("ftp://x", False, MSG_URL_SCHEME),
+        ("  ", False, None),
+    ],
+)
+def test_normalize_base_url(raw, ok, expect):
+    if ok:
+        assert normalize_base_url(raw) == expect
+    else:
+        with pytest.raises(ValueError) as ei:
+            normalize_base_url(raw)
+        if expect:
+            assert str(ei.value) == expect
+
+
+def test_validate_model_id():
+    assert validate_model_id(" gpt-4o-mini ") == "gpt-4o-mini"
+    with pytest.raises(ValueError) as ei:
+        validate_model_id("bad model")
+    assert str(ei.value) == MSG_MODEL_SPACE
+    with pytest.raises(ValueError):
+        validate_model_id("")
+
+
+def test_customs_roundtrip_settings_yaml(tmp_path, monkeypatch):
+    cfg = tmp_path / "config"
+    cfg.mkdir()
+    (cfg / "settings.yaml").write_text(
+        '# keep\ncoach:\n  provider: "deepseek"\n  language: "zh-CN"\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(customs, "_settings_path", lambda: cfg / "settings.yaml")
+    monkeypatch.setattr("dodoclaw.paths.config_dir", lambda: cfg)
+    monkeypatch.setattr("dodoclaw.config.config_dir", lambda: cfg)
+
+    e1 = customs.save_custom(name="家里的代理", base_url="https://proxy.example.com/v1", model="gpt-4o-mini")
+    e2 = customs.save_custom(name="公司中转", base_url="http://192.168.1.10:8080/v1", model="qwen-plus", activate=False)
+    listed = customs.list_customs()
+    assert {c.id for c in listed} == {e1.id, e2.id}
+    text = (cfg / "settings.yaml").read_text(encoding="utf-8")
+    assert "# keep" in text
+    assert "language" in text
+    assert "custom_providers" in text
+    assert customs.active_custom_id() == e1.id
+
+    # key never in public list
+    pub = customs.public_list(current_id=e1.id)
+    assert all("key" not in row or row.get("key") in (None, "") for row in pub)
+    assert all(row["key_env"].startswith("CUSTOM_") for row in pub)
+
+
+def test_custom_key_allowed_and_not_leaked(tmp_path, monkeypatch):
+    env = tmp_path / ".env"
+    monkeypatch.setattr(keystore, "env_path", lambda: env)
+    keystore._store = keystore.EnvFileKeyStore(env)
+    var = "CUSTOM_ABCD1234_API_KEY"
+    secret = "sk-custom-NEVER-LEAK-zzzz"
+    keystore.save_key(var, secret)
+    assert keystore.has_key(var)
+    # status / public must not echo
+    st = keycheck.key_status("custom", "自定义", "", "m", custom_id="")
+    blob = str(st)
+    assert secret not in blob
+
+
+def test_test_key_hits_base_url(monkeypatch):
+    seen = {}
+
+    class FakeCompletions:
+        def create(self, **kw):
+            return SimpleNamespace(choices=[])
+
+    class FakeChat:
+        completions = FakeCompletions()
+
+    class FakeClient:
+        def __init__(self, **kw):
+            seen.update(kw)
+            self.chat = FakeChat()
+
+    res = keycheck.test_key("sk-x", "https://proxy.example.com/v1", "my-model", client_factory=FakeClient)
+    assert res["ok"] is True
+    assert seen["base_url"] == "https://proxy.example.com/v1"
+    assert seen["api_key"] == "sk-x"
+
+
+def test_bad_address_classification():
+    class Conn(Exception):
+        pass
+
+    exc = Conn("getaddrinfo failed: Name or service not known")
+    # wrap as if openai connection error via _is_network — force by making isinstance checks fail
+    # and relying on text match inside _classify_one after we patch _is_network
+    class Net(OSError):
+        pass
+
+    e = Net("Name or service not known")
+    # Direct unit: call _classify_one with a fake that _is_network accepts
+    import httpx
+
+    class T(httpx.ConnectError):
+        def __init__(self):
+            Exception.__init__(self, "getaddrinfo failed")
+
+    out = errors.classify(T())
+    assert out["kind"] in ("bad_address", "network")
+    if out["kind"] == "bad_address":
+        assert "连不上" in out["reason_zh"]
+
+
+def test_not_found_guide_points_to_fields():
+    g = keycheck.test_guide("not_found")
+    assert "设置文件" not in g["detail_zh"]
+    assert "接口地址" in g["detail_zh"] or "模型" in g["detail_zh"]

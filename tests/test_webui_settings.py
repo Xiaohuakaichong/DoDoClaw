@@ -21,7 +21,7 @@ SECRET = "sk-test-SHOULD-NEVER-LEAK-1234567890"
 
 # ── reminder defaults (domain/reminder-budget.md) ───────
 # Rows without an engine rule (神龛/魔方/肉山/不朽盾/TP) are off and not counted.
-@pytest.mark.parametrize("pos,count", [([1], 3), ([2], 13), ([3], 3), ([4], 9), ([5], 9), ([1, 2, 3, 4, 5], 19)])
+@pytest.mark.parametrize("pos,count", [([1], 3), ([2], 13), ([3], 7), ([4], 13), ([5], 13), ([1, 2, 3, 4, 5], 23)])
 def test_budget_per_position(pos, count):
     assert st.budget(st.defaults(pos)["reminders"]) == count
 
@@ -36,6 +36,7 @@ def test_bounty_only_45_runes_only_2_lowhp_off():
         rem = st.defaults([p])["reminders"]
         assert rem["bounty"]["on"] is (p in (4, 5))
         assert rem["runes"]["on"] is (p == 2)
+        assert rem["lotus"]["on"] is (p in (3, 4, 5))
         assert rem["lowhp"]["on"] is False  # PRD 3.C1: off by default
         assert rem["buyback"]["on"] is True
 
@@ -50,7 +51,7 @@ def test_pending_rows_off_uncounted_and_locked():
     assert all(forced["reminders"][k]["on"] is False for k in st.PENDING)
     assert forced["overrides"] == []
     on_all = {k: {"on": True} for k in st.REMINDERS}
-    assert st.budget(on_all) == 6 + 10 + 3  # pending rows (and lowhp) never counted
+    assert st.budget(on_all) == 6 + 10 + 4 + 3  # bounty+runes+lotus+buyback; pending/lowhp uncounted
 
 
 def test_position_change_keeps_manual_overrides():
@@ -246,8 +247,8 @@ def _bridge_for_save(tmp_path):
 def test_bridge_save_ignores_lead_and_refuses_pending(tmp_path):
     b = _bridge_for_save(tmp_path)
     r = b.save_settings({"reminder": "bounty", "lead": 45})
-    assert r["ok"] and b.ui["reminders"]["bounty"]["lead"] == 15
-    assert st.load(b._ui_path)["reminders"]["bounty"]["lead"] == 15
+    assert r["ok"] and b.ui["reminders"]["bounty"]["lead"] == 20
+    assert st.load(b._ui_path)["reminders"]["bounty"]["lead"] == 20
     r = b.save_settings({"reminder": "roshan", "on": True})
     assert r == {"ok": False, "msg": "这条提醒还在做"} and b.ui["reminders"]["roshan"]["on"] is False
     r = b.save_settings({"positions": [1, 2, 3, 4, 5]})

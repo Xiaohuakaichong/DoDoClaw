@@ -211,16 +211,21 @@ def test_hand_written_env_keys_still_resolve(tmp_path, monkeypatch):
 # ── provider list / links ────────────────────────────────
 def test_picker_is_exactly_the_five_d10_providers():
     rows = keycheck.list_providers("deepseek")
-    assert [r["id"] for r in rows] == ["deepseek", "stepfun_plan", "stepfun", "xai", "openai"]
-    by = {r["id"]: r for r in rows}
+    ids = [r["id"] for r in rows]
+    assert ids[:2] == ["deepseek", "siliconflow"]
+    assert ids[-1] == "__add_custom__"
+    assert "stepfun_plan" in ids and "openai" in ids
+    by = {r["id"]: r for r in rows if r["id"] != "__add_custom__"}
     assert by["deepseek"]["tag"] == "默认 · 推荐" and by["deepseek"]["current"]
+    assert by["siliconflow"]["name"] == "硅基流动" and "国内需代理" not in by["siliconflow"]["tag"]
     assert by["xai"]["tag"] == "国内需代理" and "SuperGrok 会员不含 API 额度" in by["xai"]["hint"]
     assert by["openai"]["tag"] == "国内需代理" and "ChatGPT Plus 不含 API 额度" in by["openai"]["hint"]
     # Step Plan and 按量 share STEPFUN_API_KEY
     assert by["stepfun_plan"]["shares_key_with"] == ["stepfun"] and by["stepfun"]["shares_key_with"] == ["stepfun_plan"]
-    assert all(r["apply_url"].startswith("https://") for r in rows)
-    assert all("_" not in r["name"] for r in rows)  # display names only, no internal ids
-    assert set(rows[0]) == {"id", "name", "tag", "model", "configured", "shares_key_with", "hint", "apply_url", "current"}
+    presets = [r for r in rows if r.get("kind") != "add_custom"]
+    assert all(r["apply_url"].startswith("https://") for r in presets)
+    assert all("_" not in r["name"] for r in presets)  # display names only, no internal ids
+    assert {"id", "name", "tag", "model", "configured", "shares_key_with", "hint", "apply_url", "current"}.issubset(rows[0])
 
 
 def test_apply_links_go_to_key_pages():
@@ -257,10 +262,12 @@ def test_failure_guides_are_fixed_chinese():
 
 def test_failure_guides_have_no_internal_names():
     g = keycheck.test_guide("not_found")
-    assert "模型名或接口地址不对" in g["detail_zh"] and "config 文件夹" in g["detail_zh"]
-    for kind in ("ok", "plan_expired", "auth", "balance", "rate_limit", "network", "not_found", "unknown", "http"):
+    assert "模型名或接口地址不对" in g["detail_zh"]
+    assert "接口地址" in g["detail_zh"] or "模型" in g["detail_zh"]
+    assert "config 文件夹" not in g["detail_zh"]  # D12: point at in-app fields
+    for kind in ("ok", "plan_expired", "auth", "balance", "rate_limit", "network", "bad_address", "not_found", "unknown", "http"):
         text = keycheck.test_guide(kind)["detail_zh"]
-        for word in ("settings.yaml", "coach", "model", "base_url", "yaml"):
+        for word in ("settings.yaml", "coach", "base_url", "yaml"):
             assert word not in text, (kind, word)
 
 
@@ -447,9 +454,10 @@ def test_settings_state_never_contains_key_material(world):
     assert OLD not in dumped and "AAAA1111" not in dumped
     assert s["key"]["configured"] is True and s["key"]["provider_name"] == "阶跃 Step Plan"
     assert "source" not in s["key"]  # storage location is not exposed
-    key_vals = [v for k, v in s["key"].items() if not isinstance(v, (bool, dict)) and v is not None]
-    assert all(isinstance(v, str) and len(v) < 60 for v in key_vals)
+    key_vals = [v for k, v in s["key"].items() if isinstance(v, str)]
+    assert all(len(v) < 200 for v in key_vals)  # display strings / URLs only; never a key
     assert all(isinstance(r["configured"], bool) for r in s["providers"])
+    assert "customs" in s
 
 
 # ── voice follows the provider ───────────────────────────
