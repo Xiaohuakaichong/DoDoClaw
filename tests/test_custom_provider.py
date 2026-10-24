@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock
@@ -265,3 +266,15 @@ def test_custom_inline_error_text_follows_backend():
     html = (root / "settings.html").read_text(encoding="utf-8")
     assert "$(errEl).textContent = r.reason_zh" in js
     assert 'id="cf-err-url">接口地址连不上' in html
+
+
+def test_whisper_download_uses_plain_http_unless_user_set(monkeypatch):
+    from dodoclaw.webui import whisper_model
+
+    monkeypatch.delenv("HF_HUB_DISABLE_XET", raising=False)
+    whisper_model._plain_http_transfer()
+    assert os.environ["HF_HUB_DISABLE_XET"] == "1"
+    monkeypatch.setenv("HF_HUB_DISABLE_XET", "0")
+    whisper_model._plain_http_transfer()
+    assert os.environ["HF_HUB_DISABLE_XET"] == "0"
+    assert "HF_ENDPOINT" not in os.environ or os.environ["HF_ENDPOINT"]  # never set by us

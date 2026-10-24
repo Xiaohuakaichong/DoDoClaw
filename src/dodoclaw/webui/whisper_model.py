@@ -177,10 +177,29 @@ def ensure_ready(timeout: float = 600.0) -> bool:
     return _snapshot_ready()
 
 
+def _plain_http_transfer() -> None:
+    """Use hub's plain HTTP path (not Xet) unless the user chose otherwise.
+
+    Xet pre-allocates ``model.bin.incomplete`` at full size, so the on-disk
+    progress poll jumped 0%→93% and sat there. Plain HTTP streams into the file,
+    giving a real bar. Same Hugging Face endpoint; no mirror is set.
+    """
+    if "HF_HUB_DISABLE_XET" in os.environ:
+        return
+    os.environ["HF_HUB_DISABLE_XET"] = "1"
+    try:
+        from huggingface_hub import constants
+
+        constants.HF_HUB_DISABLE_XET = True
+    except Exception:
+        pass
+
+
 def _download_worker() -> None:
     _set(phase="downloading", pct=0, bytes_done=0, bytes_total=EXPECTED_BYTES, error_zh="", ready=False)
     # Point huggingface_hub at our cache without forcing a mirror
     os.environ.setdefault("HF_HOME", str(model_dir()))
+    _plain_http_transfer()
     try:
         from huggingface_hub import hf_hub_download, snapshot_download
     except Exception as exc:
