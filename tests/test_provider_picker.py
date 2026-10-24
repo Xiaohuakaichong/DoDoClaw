@@ -638,3 +638,24 @@ def test_settings_state_voice_shape(world, monkeypatch):
     assert isinstance(v["stt_opts"], list) and {o["id"] for o in v["stt_opts"]} >= {"whisper", "siliconflow", "stepfun"}
     assert {o["id"] for o in v["tts_opts"]} >= {"edge", "stepfun", "siliconflow"}
     assert "ask_on" in v and "tts_on" in v
+    # 「首声稍慢」 reserved slot stays hidden unless measured
+    assert v["tts_slow_note"] == "" and all(o.get("slow_note", "") == "" for o in v["tts_opts"])
+    assert v["stt_enabled"] is False  # 识别默认关
+
+
+def test_tts_voice_follows_backend(world, monkeypatch):
+    b = world.b
+    b.reload_env()
+    r = b.save_settings({"tts_backend": "siliconflow"})
+    assert r["ok"]
+    v = b.settings_state()["voice"]
+    ids = [x["id"] for x in v["tts_voices"]]
+    assert ids[:4] == ["anna", "bella", "claire", "diana"]
+    assert v["tts_voice"] == "anna" and v["tts_voice_zh"] == "anna（女声）"
+    assert v["tts_model"] == "FunAudioLLM/CosyVoice2-0.5B"
+    assert b.set_tts_voice("bella")["ok"]
+    assert b.set_tts_voice("cixingnansheng")["ok"] is False  # not a CosyVoice voice
+    b.save_settings({"tts_backend": "stepfun"})
+    v = b.settings_state()["voice"]
+    assert v["tts_voice"] == "cixingnansheng" and v["tts_voice_zh"] == "磁性男声"
+    assert [x["name"] for x in v["tts_voices"]][:5] == ["磁性男声", "邻家姐姐", "正派青年", "元气少女", "温柔男声"]

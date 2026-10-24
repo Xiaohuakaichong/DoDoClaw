@@ -424,7 +424,7 @@ class Bridge:
         """Picked 识别 backend (whisper | siliconflow | stepfun_*), on or off."""
         from dodoclaw.audio_providers import get_stt_backend
 
-        for raw in (self._voice_yaml().get("stt_backend"), self._svc.settings.stt_backend):
+        for raw in (self._voice_yaml().get("stt_backend"), getattr(getattr(self._svc, "settings", None), "stt_backend", None)):
             bid = get_stt_backend(str(raw)).id if raw else ""
             if bid != "mock" and _ui_backend(bid) in STT_CHOICES:
                 return bid
@@ -439,7 +439,7 @@ class Bridge:
         """Picked 播报 backend (edge | stepfun_* | siliconflow); default Edge."""
         from dodoclaw.audio_providers import get_tts_backend
 
-        for raw in (self._voice_yaml().get("tts_backend"), self._svc.settings.tts_backend):
+        for raw in (self._voice_yaml().get("tts_backend"), getattr(getattr(self._svc, "settings", None), "tts_backend", None)):
             bid = get_tts_backend(str(raw)).id if raw else ""
             if bid != "mock" and _ui_backend(bid) in TTS_CHOICES:
                 return bid
@@ -1279,6 +1279,7 @@ class Bridge:
         elif vid not in spec.voices:
             return {"ok": False, "msg": "没有这个声音"}
         # write tts_voice into the voice: block (reuse block saver via a thin helper)
+        self._pref("tts_voice")  # make sure the pref cache exists
         self._voice_pref["tts_voice"] = vid
         config.save_voice_choice(tts_voice=vid)
         if self.ui.get("tts_on") and not self._missing_key(bid, self._key_status()):
