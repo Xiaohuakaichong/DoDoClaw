@@ -23,8 +23,11 @@ POSITIONS = (1, 2, 3, 4, 5)
 # key -> (estimated announcements per 40-min game, default lead seconds or None)
 # Counts follow domain/reminder-budget.md (patch 7.41f baseline).
 REMINDERS: dict[str, tuple[int, int | None]] = {
-    "bounty": (6, 15),   # 赏金符 — default on for pos 4/5
+    # Counts follow domain/reminder-budget.md (7.41f + 2026-10-24 lotus update).
+    # pos3 16→20 / pos4·5 22→26 with lotus≈4; pos1/2 unchanged.
+    "bounty": (6, 20),   # 赏金符 — warn 20s; default on for pos 4/5
     "runes": (10, 15),   # 水符 2 + 强化符 8 — default on for pos 2
+    "lotus": (4, None),  # 莲花池 — at the mark, no early warn; default pos 3/4/5
     "shrine": (5, 15),   # 智慧神龛
     "cube": (2, 30),     # 痛苦魔方
     "roshan": (2, 30),   # 肉山复活
@@ -44,6 +47,7 @@ FAMILY_TO_ROW = {
     "bounty_rune": "bounty",
     "power_rune": "runes",
     "water_rune": "runes",
+    "lotus": "lotus",
     "shrine": "shrine",
     "cube": "cube",
     "roshan": "roshan",
@@ -65,6 +69,8 @@ def default_on(row: str, positions: list[int] | tuple[int, ...]) -> bool:
         return bool(pos & {4, 5})
     if row == "runes":
         return 2 in pos
+    if row == "lotus":
+        return bool(pos & {3, 4, 5})
     if row == "lowhp":
         return False
     return True
