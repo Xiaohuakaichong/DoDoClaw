@@ -164,3 +164,33 @@ def test_not_found_guide_points_to_fields():
     g = keycheck.test_guide("not_found")
     assert "设置文件" not in g["detail_zh"]
     assert "接口地址" in g["detail_zh"] or "模型" in g["detail_zh"]
+
+
+
+def test_whisper_component_and_ui_qa():
+    """Designer QA: bundled package reports ready; lotus has no lead slider; chrome clears."""
+    from pathlib import Path
+
+    from dodoclaw.webui import settings_store as st
+    from dodoclaw.webui import whisper_model
+
+    assert whisper_model.component_available() is True
+
+    js = (Path(__file__).resolve().parents[1] / "src/dodoclaw/webui/static/settings.js").read_text(
+        encoding="utf-8"
+    )
+    assert "fixed: '整点提醒，没有提前量'" in js
+    assert "never reuse prior built-in chrome" in js
+    css = (Path(__file__).resolve().parents[1] / "src/dodoclaw/webui/static/shell.css").read_text(
+        encoding="utf-8"
+    )
+    assert ".opt .miss[hidden]{display:none!important}" in css
+
+    # pos1 defaults: bounty / river / lotus OFF (reminder-budget.md)
+    for row in ("bounty", "runes", "lotus"):
+        assert st.default_on(row, [1]) is False
+    d = st.defaults([1])
+    assert d["reminders"]["bounty"]["on"] is False
+    assert d["reminders"]["runes"]["on"] is False
+    assert d["reminders"]["lotus"]["on"] is False
+    assert d["reminders"]["lotus"]["lead"] is None

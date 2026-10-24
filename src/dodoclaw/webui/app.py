@@ -358,8 +358,6 @@ class Bridge:
 
     def _apply_stt(self, on: bool) -> str:
         """Switch the speech-recognition backend. Returns an error in Chinese or ''."""
-        import importlib.util
-
         if not on:
             if self._svc.stt_backend != "mock":
                 self._svc.reload_voice(stt_backend="mock")
@@ -369,7 +367,8 @@ class Bridge:
         if mode == "local":
             # Missing component: UI greys the card (whisper_ready=False). Do not
             # toast over the option cards (design settings-voice-stt-missing).
-            if importlib.util.find_spec("faster_whisper") is None:
+            from dodoclaw.webui import whisper_model as _wm
+            if not _wm.component_available():
                 return "缺少本地识别组件"
             backend = "whisper"
         else:
@@ -390,13 +389,11 @@ class Bridge:
         return ""
 
     def _voice_state(self, key: dict[str, Any]) -> dict[str, Any]:
-        import importlib.util
-
         from dodoclaw.webui import tts_preview
         from dodoclaw.webui import whisper_model
 
         svc = self._svc
-        ready = importlib.util.find_spec("faster_whisper") is not None
+        ready = whisper_model.component_available()
         dl = whisper_model.status()
         cloud_share = ""
         if key.get("provider") == "siliconflow" and key.get("siliconflow_key"):

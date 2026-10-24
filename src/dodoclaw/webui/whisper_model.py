@@ -18,6 +18,31 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
+
+def component_available() -> bool:
+    """True when the faster-whisper *package* is importable (weights may still be missing).
+
+    PyInstaller onedir can make bare ``find_spec`` miss a collected package under
+    ``sys._MEIPASS``; fall back to the MEIPASS folder and a real import.
+    """
+    import importlib
+    import importlib.util
+    import sys
+
+    if importlib.util.find_spec("faster_whisper") is not None:
+        return True
+    if getattr(sys, "frozen", False):
+        meipass = Path(getattr(sys, "_MEIPASS", "") or "")
+        if meipass.is_dir() and (meipass / "faster_whisper").is_dir():
+            return True
+        try:
+            importlib.import_module("faster_whisper")
+            return True
+        except Exception:
+            return False
+    return False
+
+
 MODEL_SIZE = "base"
 # Official faster-whisper converted weights on Hugging Face
 HF_REPO = "Systran/faster-whisper-base"

@@ -7,7 +7,7 @@ let dlTimer = null;
 const ROWS = {
   bounty: { n: '赏金符', s: '每 3 分钟（跳过 0:00），提前 20 秒 · 所有位置可开，4、5 号位默认开', ico: 'coin', cls: 'gold' },
   runes: { n: '河道神符', s: '水符 2:00 / 4:00，强化符 6:00 起每 2 分 · 所有位置可开，2 号位默认开', ico: 'rune' },
-  lotus: { n: '莲花池', s: '6:00 起每 6 分钟整点提醒 · 所有位置可开，3、4、5 号位默认开', ico: 'spark' },
+  lotus: { n: '莲花池', s: '6:00 起每 6 分钟整点提醒 · 所有位置可开，3、4、5 号位默认开', ico: 'spark', fixed: '整点提醒，没有提前量' },
   shrine: { n: '智慧神龛', s: '7:00 起每 7 分钟', ico: 'shrine' },
   cube: { n: '痛苦魔方', s: '15:00 首刷及每次复活 · “魔方 30 秒后刷新”', ico: 'cube', cls: 'warm' },
   roshan: { n: '肉山复活', s: '最早复活时间前提醒 · “肉山快复活了”', ico: 'skull', cls: 'warm' },
@@ -226,6 +226,10 @@ function openCustomForm(id) {
   $('#cf-res').innerHTML = '<span class="hint">填接口地址和模型 ID，粘贴 Key 后点“保存并测试”。</span>';
   $('#c-coach').dataset.pane = 'custom-form';
   $('#prov-name').textContent = customFormId ? '编辑自定义' : '＋ 自定义（OpenAI 兼容）';
+  // Drop prior built-in chrome (tag / model label / 去申请) — custom model lives in the form only.
+  $('#prov-tag').innerHTML = '';
+  $('#prov-model').textContent = '';
+  const ap0 = $('#btn-apply'); if (ap0) ap0.style.display = 'none';
 }
 
 function renderCoach(s) {
@@ -239,14 +243,19 @@ function renderCoach(s) {
   })();
   if (pane !== 'custom-form') $('#c-coach').dataset.pane = pane;
   // 服务商
-  if (pane !== 'custom-form') {
+  const ap = $('#btn-apply');
+  if (pane === 'custom-form') {
+    // Keep form title from openCustomForm; never reuse prior built-in chrome.
+    $('#prov-tag').innerHTML = '';
+    $('#prov-model').textContent = '';
+    ap.style.display = 'none';
+  } else {
     $('#prov-name').textContent = k.provider_name;
     $('#prov-tag').innerHTML = (k.in_picker || k.is_custom) ? tagPill(k.provider_tag || '', k.provider === 'deepseek') : '';
+    $('#prov-model').textContent = k.model ? `模型 ${k.model}` : '';
+    ap.innerHTML = `去申请 ${esc(k.provider_short)} Key ${EXT}`;
+    ap.style.display = k.apply ? '' : 'none';
   }
-  $('#prov-model').textContent = k.model ? `模型 ${k.model}` : '';
-  const ap = $('#btn-apply');
-  ap.innerHTML = `去申请 ${esc(k.provider_short)} Key ${EXT}`;
-  ap.style.display = k.apply ? '' : 'none';
   renderProvMenu(s);
   renderCustomList(s);
   // 模型 combobox（预设）
