@@ -124,19 +124,22 @@ PROVIDERS: dict[str, ProviderSpec] = {
     ),
     "siliconflow": ProviderSpec(
         id="siliconflow",
-        name="硅基流动 SiliconFlow",
+        name="硅基流动",
         base_url="https://api.siliconflow.cn/v1",
-        default_model="deepseek-ai/DeepSeek-V3",
+        # Docs example 2026-10: deepseek-ai/DeepSeek-V4-Flash (docs.siliconflow.cn chat-completions)
+        default_model="deepseek-ai/DeepSeek-V4-Flash",
         models=(
+            "deepseek-ai/DeepSeek-V4-Flash",
             "deepseek-ai/DeepSeek-V3",
             "deepseek-ai/DeepSeek-R1",
             "Qwen/Qwen2.5-72B-Instruct",
-            "THUDM/glm-4-9b-chat",
+            "Qwen/Qwen3-8B",
         ),
         key_env="SILICONFLOW_API_KEY",
         region="cn",
-        note="聚合多家开源模型，OpenAI 兼容",
+        note="OpenAI 兼容，国内直连",
         docs_url="https://docs.siliconflow.cn/",
+        key_url="https://cloud.siliconflow.cn/account/ak",
     ),
     "volcengine": ProviderSpec(
         id="volcengine",
@@ -221,6 +224,9 @@ DEFAULT_PROVIDER_ID = "deepseek"
 def chat_extra_body(provider_id: str | None, model: str = "") -> dict:
     """Provider-specific extra fields for chat.completions (e.g. DeepSeek thinking off)."""
     spec = get_provider(provider_id)
+    if spec.id == "siliconflow":
+        # Docs: enable_thinking toggles reasoning mode on SiliconFlow chat models
+        return {"enable_thinking": False}
     if spec.thinking_off and (not model or model.startswith("deepseek")):
         return {"thinking": {"type": "disabled"}}
     return {}

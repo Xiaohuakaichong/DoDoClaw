@@ -16,12 +16,13 @@ AUTH = "Key 无效或已过期"
 BALANCE = "账户余额不足"
 RATE_LIMIT = "请求太频繁，稍后再试"
 NETWORK = "联网失败，检查网络"
+BAD_ADDRESS = "连不上这个接口地址，检查一下地址和网络"
 NOT_FOUND = "模型名或接口地址不对（HTTP 404）"
 NO_KEY = "还没填 Key"
 UNKNOWN = "教练服务出错，详情见日志"
 
 # most specific first — used to pick the best match along an exception chain
-_RANK = ("plan_expired", "balance", "auth", "rate_limit", "network", "no_key", "not_found", "http", "unknown")
+_RANK = ("plan_expired", "balance", "auth", "rate_limit", "bad_address", "network", "no_key", "not_found", "http", "unknown")
 
 
 def _status(exc: BaseException) -> int | None:
@@ -73,6 +74,21 @@ def _is_network(exc: BaseException) -> bool:
 
 def _classify_one(exc: BaseException) -> tuple[str, str]:
     if _is_network(exc):
+        # Connection failures to a user-typed base URL map to bad_address so the
+        # settings form can highlight the 接口地址 field (PRD D12).
+        text = _text(exc)
+        if any(s in text for s in (
+            "name or service not known",
+            "nodename nor servname",
+            "getaddrinfo failed",
+            "failed to resolve",
+            "connect error",
+            "connection refused",
+            "no route to host",
+            "network is unreachable",
+            "name resolution",
+        )):
+            return "bad_address", BAD_ADDRESS
         return "network", NETWORK
     code = _status(exc)
     text = _text(exc)
