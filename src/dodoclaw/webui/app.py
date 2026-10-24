@@ -744,7 +744,7 @@ class Bridge:
         never the key. ``field`` is url|model|key|"" for inline form errors.
         """
         from dodoclaw.webui import customs, keystore
-        from dodoclaw.webui.provider_validate import MSG_MODEL_EMPTY, MSG_URL_EMPTY
+        from dodoclaw.webui.provider_validate import MSG_MODEL_EMPTY, MSG_URL_EMPTY, MSG_URL_UNREACHABLE
 
         def fail(kind: str, reason_zh: str, field: str = "") -> dict:
             return {
@@ -796,9 +796,9 @@ class Bridge:
         if not res.get("ok"):
             kind = res.get("kind") or ""
             if kind in ("bad_address", "network"):
+                # format errors were caught above (ValueError); this is connectivity
                 field = "url"
-                if kind == "bad_address":
-                    res = {**res, "reason_zh": "地址连不上 · 检查 URL 或网络后重试"}
+                res = {**res, "reason_zh": MSG_URL_UNREACHABLE}
             elif kind == "auth":
                 field = "key"
                 res = {**res, "reason_zh": "Key 无效 · 可能复制少了一截，或在平台上被删了"}

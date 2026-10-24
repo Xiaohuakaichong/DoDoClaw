@@ -194,3 +194,74 @@ def test_whisper_component_and_ui_qa():
     assert d["reminders"]["runes"]["on"] is False
     assert d["reminders"]["lotus"]["on"] is False
     assert d["reminders"]["lotus"]["lead"] is None
+
+
+def _bare_bridge(monkeypatch, test_res):
+    """Bridge.save_custom without the window/service: stub the side effects."""
+    from dodoclaw.webui import app as webapp
+
+    b = webapp.Bridge.__new__(webapp.Bridge)
+    b._svc = SimpleNamespace(coach=SimpleNamespace(api_key="sk-x"))
+    b._reload_coach = lambda: None
+    b.test_key = lambda: dict(test_res)
+    b._follow_provider_stt = lambda: ""
+    b._save_ui = lambda: None
+    def fake_save(**kw):
+        normalize_base_url(kw["base_url"])  # same validator as the real store
+        return SimpleNamespace(id="c1", model=kw["model"], key_env="CUSTOM_C1_API_KEY")
+
+    monkeypatch.setattr(customs, "save_custom", fake_save)
+    monkeypatch.setattr(keystore, "save_key", lambda *a, **k: None)
+    return b
+
+
+@pytest.mark.parametrize(
+    "kind,field,needle,absent",
+    [
+        ("bad_address", "url", "接口地址连不上", "格式不对"),
+        ("network", "url", "接口地址连不上", "格式不对"),
+        ("auth", "key", "Key 无效", "连不上"),
+        ("not_found", "model", "模型不存在", "连不上"),
+    ],
+)
+def test_save_custom_probe_errors_map_to_fields(monkeypatch, kind, field, needle, absent):
+    b = _bare_bridge(monkeypatch, {"ok": False, "kind": kind, "reason_zh": "x", "ms": None})
+    r = b.save_custom("", "https://203.0.113.1/v1", "m", "sk-x", "")
+    assert r["ok"] is False and r["field"] == field
+    assert needle in r["reason_zh"] and absent not in r["reason_zh"]
+
+
+@pytest.mark.parametrize("url", ["ftp://x.example.com", "https://", "not a url"])
+def test_save_custom_bad_url_shape_keeps_format_message(monkeypatch, url):
+    b = _bare_bridge(monkeypatch, {"ok": True})
+    r = b.save_custom("", url, "m", "", "")
+    assert r["ok"] is False and r["field"] == "url"
+    assert "连不上" not in r["reason_zh"]
+    assert r["reason_zh"].startswith("接口地址") or r["reason_zh"].startswith("非本机")
+
+
+def test_closed_port_probe_is_connectivity_not_format():
+    # valid-shaped URL, nothing listening -> bad_address/network (never 格式不对)
+    res = keycheck.test_key("sk-x", "http://127.0.0.1:9/v1", "m", timeout=3)
+    assert res["ok"] is False
+    assert res["kind"] in ("bad_address", "network")
+
+
+def test_whisper_progress_counts_incomplete_blobs(tmp_path):
+    from dodoclaw.webui import whisper_model
+
+    blobs = tmp_path / ("models--" + whisper_model.HF_REPO.replace("/", "--")) / "blobs"
+    blobs.mkdir(parents=True)
+    (blobs / "abc123.incomplete").write_bytes(b"x" * 4096)
+    (blobs / "def456").write_bytes(b"y" * 1024)
+    assert whisper_model._cached_bytes(tmp_path) == 5120
+
+
+def test_custom_inline_error_text_follows_backend():
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1] / "src/dodoclaw/webui/static"
+    js = (root / "settings.js").read_text(encoding="utf-8")
+    html = (root / "settings.html").read_text(encoding="utf-8")
+    assert "$(errEl).textContent = r.reason_zh" in js
+    assert 'id="cf-err-url">接口地址连不上' in html

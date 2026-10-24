@@ -91,6 +91,23 @@ def hf_mirror_note() -> str:
     return "未设置 HF_ENDPOINT（走 Hugging Face 官方）；如需镜像可自行设置 HF_ENDPOINT=https://hf-mirror.com"
 
 
+def _cached_bytes(root: Path) -> int:
+    """Bytes of this repo already on disk, including in-flight ``*.incomplete`` blobs.
+
+    huggingface_hub writes to ``blobs/<sha>.incomplete`` (hash names), so matching
+    on ``model.bin`` alone kept the bar at 0% until the very end.
+    """
+    repo = root / ("models--" + HF_REPO.replace("/", "--"))
+    done = 0
+    try:
+        for f in repo.rglob("*"):
+            if f.is_file() and not f.is_symlink():
+                done += f.stat().st_size
+    except Exception:
+        pass
+    return done
+
+
 def _snapshot_ready() -> bool:
     """True when the converted model files are present in the hub cache."""
     try:
@@ -189,13 +206,7 @@ def _download_worker() -> None:
             while not stop_poll.wait(0.4):
                 if _cancel.is_set():
                     return
-                done = 0
-                try:
-                    for f in root.rglob("*"):
-                        if f.is_file() and f.name in {"model.bin", "tokenizer.json", "vocabulary.txt", "config.json"}:
-                            done += f.stat().st_size
-                except Exception:
-                    pass
+                done = _cached_bytes(root)
                 total = max(EXPECTED_BYTES, done)
                 pct = int(min(99, done / EXPECTED_BYTES * 100))
                 _set(phase="downloading", pct=pct, bytes_done=done, bytes_total=EXPECTED_BYTES)

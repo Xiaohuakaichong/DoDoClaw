@@ -630,13 +630,13 @@ $('#btn-cf-save').onclick = async () => {
   try {
     r = await withTimeout(api().save_custom($('#cf-name').value, $('#cf-url').value, $('#cf-model').value, $('#cf-key').value, customFormId || ''), TEST_WAIT_MS);
   } catch (e) {
-    r = e && e.timeout ? { ok: false, reason_zh: '等了 20 秒还没有回应', field: 'url' } : { ok: false, reason_zh: '没能保存', field: '' };
+    r = e && e.timeout ? { ok: false, reason_zh: '接口地址连不上 · 等了 20 秒还没有回应', field: 'url' } : { ok: false, reason_zh: '没能保存', field: '' };
   }
   customBusy = false; $('#btn-cf-save').classList.remove('busy');
   $('#cf-key').value = '';
-  if (r.field === 'url') $('#cf-err-url').classList.add('on');
-  if (r.field === 'model') $('#cf-err-model').classList.add('on');
-  if (r.field === 'key') $('#cf-err-key').classList.add('on');
+  // inline text follows the backend: 格式不对 (validator) vs 连不上 (probe) vs Key/模型
+  const errEl = { url: '#cf-err-url', model: '#cf-err-model', key: '#cf-err-key' }[r.field];
+  if (errEl && !r.ok) { if (r.reason_zh) $(errEl).textContent = r.reason_zh; $(errEl).classList.add('on'); }
   if (r.ok) {
     customFormId = undefined;
     flashSaved();

@@ -15,6 +15,8 @@ MSG_URL_SCHEME = "接口地址必须以 http:// 或 https:// 开头"
 MSG_URL_HOST = "接口地址缺少主机名"
 MSG_URL_HTTP_PUBLIC = "非本机地址请用 https://（http 只允许 localhost 和局域网）"
 MSG_URL_BAD = "接口地址格式不对"
+# Valid-shaped URL but the probe could not reach it (DNS / refused / timeout)
+MSG_URL_UNREACHABLE = "接口地址连不上 · 检查地址或网络后重试"
 MSG_MODEL_EMPTY = "请填写模型 ID"
 MSG_MODEL_LONG = "模型 ID 最多 200 个字符"
 MSG_MODEL_SPACE = "模型 ID 不能有空格或换行"
