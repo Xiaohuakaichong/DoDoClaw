@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 import os
 from functools import lru_cache
@@ -135,11 +136,12 @@ class Settings(BaseSettings):
     def resolve_llm(self) -> tuple[str, str, str, str, str]:
         """
         Returns (provider_id, provider_name, api_key, base_url, model).
-        Provider / base URL / model: settings.yaml coach.* → provider defaults
-        (DEFAULT_PROVIDER_ID). .env only supplies keys (PRD D9).
+        Provider: settings.yaml coach.provider. Connection: provider_configs,
+        then legacy coach URL/model, then provider defaults. .env supplies keys.
         """
         self._note_ignored_env()
-        yaml_coach = (self.load_yaml().get("coach") or {})
+        yaml_data = self.load_yaml()
+        yaml_coach = (yaml_data.get("coach") or {})
         provider_id = str(yaml_coach.get("provider") or DEFAULT_PROVIDER_ID).strip()
 
         # Legacy: only an xAI key and no provider chosen in settings.yaml → keep xai
@@ -176,6 +178,10 @@ class Settings(BaseSettings):
             base_hint, model_hint = "", ""
 
         spec = get_provider(provider_id)
+        from dodoclaw.webui.provider_store import preset_values
+
+        connection = preset_values(spec.id, yaml_data)
+        base_hint, model_hint = connection["base_url"], connection["model"]
         # Provider's own key (Settings fields include the .env file), then the
         # generic LLM_API_KEY. Never another vendor's key (PRD D10 picker).
         vendor_key = (self.vendor_key(spec.id) or "").strip()
@@ -256,7 +262,18 @@ def save_coach_choice(provider_id: str, model: str = "", base_url: str = "") -> 
     """Write coach.provider / model / base_url into config/settings.yaml (PRD D9:
     the provider choice lives there, not in .env). Only those lines of the
     ``coach:`` block change; comments and everything else are kept.
-    Empty model / base_url removes the override (provider default)."""
+    Empty model / base_url removes the override (provider default). An existing
+    Provider Hub entry is synchronized so older settings entrypoints keep working."""
+    from dodoclaw.providers import PROVIDERS
+    from dodoclaw.webui import provider_store
+
+    data = provider_store.load()
+    entries = data.get("provider_configs") or {}
+    if provider_id in PROVIDERS and provider_id != "custom" and isinstance(entries, dict) and provider_id in entries:
+        spec = get_provider(provider_id)
+        desired = {"base_url": (base_url or spec.base_url).rstrip("/"), "model": model or spec.default_model}
+        if provider_store.preset_values(provider_id, data) != desired:
+            provider_store.save_preset(provider_id, desired["base_url"], desired["model"])
     return _save_block_keys("coach", {"provider": provider_id, "model": model, "base_url": base_url})
 
 
@@ -285,20 +302,41 @@ def _save_block_keys(section: str, want: dict[str, str]) -> Path:
     want = dict(want)
     names = "|".join(re.escape(k) for k in want) or "(?!)"
     block = lines[start + 1 : end]
+    # Match only this section's direct fields. A coach can contain nested
+    # custom_providers whose model/base_url must never be rewritten here.
+    direct_indent = min((
+        len(m.group(1)) for line in block
+        if (m := re.match(r"^([ \t]+)[a-zA-Z_][\w-]*\s*:", line))
+    ), default=2)
     out: list[str] = []
     for ln in block:
         m = re.match(rf"^(\s+)({names})\s*:", ln)
-        if m and m.group(2) in want:
+        if m and len(m.group(1)) == direct_indent and m.group(2) in want:
             name, val = m.group(2), want.pop(m.group(2))
             if val:
-                out.append(f'{m.group(1)}{name}: "{val}"')
+                out.append(f'{m.group(1)}{name}: {json.dumps(val, ensure_ascii=False)}')
             continue
         out.append(ln)
-    new = [f'  {k}: "{v}"' for k, v in want.items() if v]
+    indent = " " * direct_indent
+    new = [f'{indent}{k}: {json.dumps(v, ensure_ascii=False)}' for k, v in want.items() if v]
     lines[start + 1 : end] = new + out
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(path.suffix + ".tmp")
     tmp.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    os.replace(tmp, path)
+    replace_settings_file(tmp, path)
     reload_settings()
     return path
+
+
+def replace_settings_file(tmp: Path, path: Path) -> None:
+    """Retry short Windows sharing violations while keeping the write atomic."""
+    import time
+
+    for attempt in range(4):
+        try:
+            os.replace(tmp, path)
+            return
+        except PermissionError:
+            if attempt == 3:
+                raise
+            time.sleep(0.05 * (attempt + 1))

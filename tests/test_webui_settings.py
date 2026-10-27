@@ -20,15 +20,18 @@ SECRET = "sk-test-SHOULD-NEVER-LEAK-1234567890"
 
 
 # ── reminder defaults (domain/reminder-budget.md) ───────
-# Rows without an engine rule (神龛/魔方/肉山/不朽盾/TP) are off and not counted.
-@pytest.mark.parametrize("pos,count", [([1], 3), ([2], 13), ([3], 7), ([4], 13), ([5], 13), ([1, 2, 3, 4, 5], 23)])
+# Every row has an engine rule now; per-position totals match the budget table
+# (1号 16 / 2号 26 / 3号 20 / 4·5号 26). Ticking all five positions is the
+# user's choice and only warns.
+@pytest.mark.parametrize("pos,count", [([1], 16), ([2], 26), ([3], 20), ([4], 26), ([5], 26), ([1, 2, 3, 4, 5], 36)])
 def test_budget_per_position(pos, count):
     assert st.budget(st.defaults(pos)["reminders"]) == count
 
 
 def test_defaults_stay_under_cap():
-    for pos in ([1], [2], [3], [4], [5], [1, 2, 3, 4, 5]):
+    for pos in ([1], [2], [3], [4], [5]):
         assert st.budget(st.defaults(pos)["reminders"]) <= st.BUDGET_CAP
+    assert st.budget(st.defaults([1, 2, 3, 4, 5])["reminders"]) > st.BUDGET_CAP  # UI warns
 
 
 def test_bounty_only_45_runes_only_2_lowhp_off():
@@ -41,17 +44,39 @@ def test_bounty_only_45_runes_only_2_lowhp_off():
         assert rem["buyback"]["on"] is True
 
 
-def test_pending_rows_off_uncounted_and_locked():
+def test_pending_rows_off_uncounted_and_locked(monkeypatch):
+    """The 即将上线 mechanism still works for any future row without a rule."""
+    monkeypatch.setattr(st, "PENDING", frozenset({"roshan"}))
     cur = st.defaults([2])
-    for k in st.PENDING:
-        assert cur["reminders"][k]["on"] is False
-        new, err = st.toggle_reminder(cur, k, True)
-        assert err == "这条提醒还在做" and new is cur
-    forced = st.merge({"reminders": {k: {"on": True} for k in st.PENDING}, "overrides": list(st.PENDING)})
-    assert all(forced["reminders"][k]["on"] is False for k in st.PENDING)
-    assert forced["overrides"] == []
+    assert cur["reminders"]["roshan"]["on"] is False
+    new, err = st.toggle_reminder(cur, "roshan", True)
+    assert err == "这条提醒还在做" and new is cur
+    forced = st.merge({"reminders": {"roshan": {"on": True}}, "overrides": ["roshan"]})
+    assert forced["reminders"]["roshan"]["on"] is False and forced["overrides"] == []
     on_all = {k: {"on": True} for k in st.REMINDERS}
-    assert st.budget(on_all) == 6 + 10 + 4 + 3  # bounty+runes+lotus+buyback; pending/lowhp uncounted
+    assert st.budget(on_all) == 36 - 2  # roshan uncounted, lowhp always uncounted
+
+
+def test_all_rows_live_and_switchable():
+    assert st.PENDING == frozenset()
+    cur = st.defaults([1])
+    for k in ("shrine", "cube", "roshan", "aegis", "tp"):
+        assert cur["reminders"][k]["on"] is True
+        new, err = st.toggle_reminder(cur, k, False)
+        assert err == "" and new["reminders"][k]["on"] is False and k in new["overrides"]
+    on_all = {k: {"on": True} for k in st.REMINDERS}
+    assert st.budget(on_all) == 6 + 10 + 4 + 5 + 2 + 2 + 2 + 2 + 3  # lowhp uncounted
+
+
+def test_formerly_pending_rows_ignore_forced_off_from_old_saves():
+    """Older builds saved shrine/cube/roshan/aegis/tp as off (forced, not chosen)."""
+    old = {"positions": [3], "reminders": {k: {"on": False} for k in st.WAS_PENDING}}
+    out = st.merge(old)
+    assert all(out["reminders"][k]["on"] is True for k in st.WAS_PENDING)
+    # …but a row the user switched off by hand since then stays off
+    chosen = st.merge({**old, "overrides": ["roshan"]})
+    assert chosen["reminders"]["roshan"]["on"] is False
+    assert chosen["reminders"]["aegis"]["on"] is True
 
 
 def test_position_change_keeps_manual_overrides():
@@ -65,12 +90,12 @@ def test_position_change_keeps_manual_overrides():
 
 def test_cap_warns_but_never_blocks(monkeypatch):
     monkeypatch.setattr(st, "BUDGET_CAP", 10)
-    cur = st.defaults([2])  # 13 > 10
-    cur, _ = st.toggle_reminder(cur, "runes", False)  # 3
+    cur = st.defaults([2])  # 26 > 10
+    cur, _ = st.toggle_reminder(cur, "runes", False)  # 16
     new, err = st.toggle_reminder(cur, "runes", True)
     assert err == "" and new["reminders"]["runes"]["on"] is True
     new, err = st.toggle_reminder(new, "bounty", True)
-    assert err == "" and st.budget(new["reminders"]) == 19 > st.BUDGET_CAP
+    assert err == "" and st.budget(new["reminders"]) == 32 > st.BUDGET_CAP
     assert "超过建议的 30 条" in st.OVER_CAP_HINT
 
 
@@ -244,13 +269,17 @@ def _bridge_for_save(tmp_path):
     return b
 
 
-def test_bridge_save_ignores_lead_and_refuses_pending(tmp_path):
+def test_bridge_save_ignores_lead_and_refuses_pending(tmp_path, monkeypatch):
     b = _bridge_for_save(tmp_path)
     r = b.save_settings({"reminder": "bounty", "lead": 45})
     assert r["ok"] and b.ui["reminders"]["bounty"]["lead"] == 20
     assert st.load(b._ui_path)["reminders"]["bounty"]["lead"] == 20
-    r = b.save_settings({"reminder": "roshan", "on": True})
-    assert r == {"ok": False, "msg": "这条提醒还在做"} and b.ui["reminders"]["roshan"]["on"] is False
+    r = b.save_settings({"reminder": "roshan", "on": False})
+    assert r["ok"] and b.ui["reminders"]["roshan"]["on"] is False
+    assert st.load(b._ui_path)["reminders"]["roshan"]["on"] is False  # kept via overrides
+    monkeypatch.setattr(st, "PENDING", frozenset({"aegis"}))
+    r = b.save_settings({"reminder": "aegis", "on": True})
+    assert r == {"ok": False, "msg": "这条提醒还在做"}
     r = b.save_settings({"positions": [1, 2, 3, 4, 5]})
     assert r["ok"]
 

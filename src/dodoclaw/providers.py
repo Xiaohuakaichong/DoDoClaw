@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
@@ -92,35 +92,41 @@ PROVIDERS: dict[str, ProviderSpec] = {
         name="通义千问（阿里云 DashScope）",
         base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
         default_model="qwen-plus",
-        models=("qwen-plus", "qwen-turbo", "qwen-max", "qwen-long", "qwen2.5-72b-instruct"),
+        models=("qwen-plus", "qwen3.8-flash", "qwen3.7-plus", "qwen3.8-max"),
         key_env="DASHSCOPE_API_KEY",
         region="cn",
-        docs_url="https://help.aliyun.com/zh/model-studio/developer-reference/compatibility-of-openai-with-dashscope",
+        note="北京地域标准 API；Key 需与地域匹配，其他地域或套餐可修改地址",
+        docs_url="https://help.aliyun.com/zh/model-studio/compatibility-of-openai-with-dashscope",
+        key_url="https://bailian.console.aliyun.com/cn-beijing/model/settings/api-key",
     ),
     "zhipu": ProviderSpec(
         id="zhipu",
         name="智谱 GLM",
         base_url="https://open.bigmodel.cn/api/paas/v4",
-        default_model="glm-4-flash",
-        models=("glm-4-flash", "glm-4-air", "glm-4-plus", "glm-4-long", "glm-4"),
+        default_model="glm-5.3-flash",
+        models=("glm-5.3-flash", "glm-5.3-flashx", "glm-5.3", "glm-5.2"),
         key_env="ZHIPU_API_KEY",
         region="cn",
-        docs_url="https://open.bigmodel.cn/dev/api",
+        note="标准模型 API；GLM 5.3 系列启用思考，模型可按控制台覆盖",
+        docs_url="https://docs.bigmodel.cn/cn/guide/develop/openai/introduction",
+        key_url="https://bigmodel.cn/usercenter/proj-mgmt/apikeys",
     ),
     "moonshot": ProviderSpec(
         id="moonshot",
         name="月之暗面 Kimi（Moonshot）",
         base_url="https://api.moonshot.cn/v1",
-        default_model="moonshot-v1-8k",
+        default_model="kimi-k3.1-pro",
         models=(
-            "moonshot-v1-8k",
-            "moonshot-v1-32k",
-            "moonshot-v1-128k",
-            "kimi-latest",
+            "kimi-k3.1-pro",
+            "kimi-k3.1-pro-highspeed",
+            "kimi-k3",
+            "kimi-k2.6",
         ),
         key_env="MOONSHOT_API_KEY",
         region="cn",
-        docs_url="https://platform.moonshot.cn/docs/api/chat",
+        note="Kimi 开放平台标准 API；moonshot-v1 系列已下线",
+        docs_url="https://platform.kimi.com/docs/get-api-key",
+        key_url="https://platform.kimi.com/console/api-keys",
     ),
     "siliconflow": ProviderSpec(
         id="siliconflow",
@@ -145,22 +151,25 @@ PROVIDERS: dict[str, ProviderSpec] = {
         id="volcengine",
         name="豆包 / 火山方舟（Volcengine）",
         base_url="https://ark.cn-beijing.volces.com/api/v3",
-        default_model="doubao-pro-32k",
-        models=("doubao-pro-32k", "doubao-lite-32k", "doubao-pro-128k"),
+        default_model="doubao-seed-2-1-pro-260915",
+        models=("doubao-seed-2-1-pro-260915",),
         key_env="ARK_API_KEY",
         region="cn",
-        note="模型名常为接入点 Endpoint ID，请在控制台复制后覆盖",
-        docs_url="https://www.volcengine.com/docs/82379",
+        note="需先开通模型；可填写控制台提供的 Model ID 或推理接入点 ID",
+        docs_url="https://docs.volcengine.com/docs/ark/base-url-and-authentication?lang=zh",
+        key_url="https://ark.volcengine.com/region:cn-beijing/apikey",
     ),
     "minimax": ProviderSpec(
         id="minimax",
         name="MiniMax",
-        base_url="https://api.minimax.chat/v1",
-        default_model="MiniMax-Text-01",
-        models=("MiniMax-Text-01", "abab6.5s-chat", "abab6.5-chat"),
+        base_url="https://api.minimax.cn/v1",
+        default_model="MiniMax-M3",
+        models=("MiniMax-M3", "MiniMax-M3.1-Flash"),
         key_env="MINIMAX_API_KEY",
         region="cn",
-        docs_url="https://platform.minimaxi.com/document/ChatCompletion%20v2",
+        note="国内开放平台 OpenAI 兼容接口；默认 M3 关闭思考以便快速回答",
+        docs_url="https://platform.minimax.cn/docs/api-reference/text-openai-api",
+        key_url="https://platform.minimax.cn/console/access?tab=api-keys",
     ),
     "yi": ProviderSpec(
         id="yi",
@@ -224,12 +233,51 @@ DEFAULT_PROVIDER_ID = "deepseek"
 def chat_extra_body(provider_id: str | None, model: str = "") -> dict:
     """Provider-specific extra fields for chat.completions (e.g. DeepSeek thinking off)."""
     spec = get_provider(provider_id)
+    model = model or spec.default_model
     if spec.id == "siliconflow":
         # Docs: enable_thinking toggles reasoning mode on SiliconFlow chat models
         return {"enable_thinking": False}
     if spec.thinking_off and (not model or model.startswith("deepseek")):
         return {"thinking": {"type": "disabled"}}
+    if spec.id == "minimax" and model == "MiniMax-M3":
+        return {"thinking": {"type": "disabled"}}
+    if spec.id == "volcengine" and model == "doubao-seed-2-1-pro-260915":
+        return {"thinking": {"type": "disabled"}}
+    if _requires_reasoning(spec.id, model):
+        # These models reject disabling thinking. Use the lowest documented
+        # reasoning effort for short coach responses instead.
+        return {"reasoning_effort": "low"}
     return {}
+
+
+def _requires_reasoning(provider_id: str, model: str) -> bool:
+    return (
+        (provider_id == "zhipu" and model.startswith("glm-5.3"))
+        or (provider_id == "moonshot" and model.startswith("kimi-k3"))
+        or (provider_id == "minimax" and model == "MiniMax-M3.1-Flash")
+    )
+
+
+def chat_max_tokens(provider_id: str | None, model: str = "", default: int = 500) -> int:
+    """Leave room for mandatory reasoning before the final answer.
+
+    The provider counts reasoning tokens in max_tokens. A tiny key check or
+    coach budget can otherwise terminate with empty content on these models.
+    """
+    spec = get_provider(provider_id)
+    if _requires_reasoning(spec.id, model or spec.default_model):
+        return max(default, 8192)
+    return default
+
+
+def chat_temperature(
+    provider_id: str | None, model: str = "", default: float = 0.55
+) -> float:
+    """Respect the fixed temperature required by Kimi K3 models."""
+    spec = get_provider(provider_id)
+    if spec.id == "moonshot" and (model or spec.default_model).startswith("kimi-k3"):
+        return 1.0
+    return default
 
 
 def list_providers() -> list[ProviderSpec]:

@@ -17,14 +17,30 @@ def strip_html(text: str) -> str:
     return t
 
 
+_TOKEN_RE = re.compile(r"[a-z0-9_]+|[\u4e00-\u9fff]+")
+
+
 def tokenize(text: str) -> list[str]:
-    """Lightweight tokens for EN/CN keyword retrieval."""
+    """Lightweight tokens for EN/CN keyword retrieval.
+
+    Latin/digit words stay whole; Chinese runs become overlapping bigrams
+    ("削弱了什么" -> 削弱 弱了 了什 什么). Fixed 1–4 char chunks used to split
+    the query and the documents at different places, so Chinese questions
+    almost never matched anything.
+    """
     if not text:
         return []
-    text = text.lower()
-    # keep cjk as unigrams/bigrams-ish by chars groups + latin words
-    parts = re.findall(r"[a-z0-9_]+|[\u4e00-\u9fff]{1,4}", text)
-    return [p for p in parts if len(p) > 1 or "\u4e00" <= p <= "\u9fff"]
+    out: list[str] = []
+    for m in _TOKEN_RE.finditer(text.lower()):
+        p = m.group()
+        if "\u4e00" <= p[0] <= "\u9fff":
+            if len(p) == 1:
+                out.append(p)
+            else:
+                out.extend(p[i : i + 2] for i in range(len(p) - 1))
+        elif len(p) > 1:
+            out.append(p)
+    return out
 
 
 def pretty_hero_key(name: str) -> str:

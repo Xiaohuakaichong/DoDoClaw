@@ -22,17 +22,20 @@ KEY_ENVS: tuple[str, ...] = tuple(sorted({p.key_env for p in PROVIDERS.values()}
 STT_PROVIDERS = {"stepfun_plan", "stepfun", "siliconflow"}
 
 
-# 服务商 dropdown (PRD D10, design/v2 README): exactly these five, in this order.
-# (id, name, tag in the field, tag in the menu, hint). Other presets (通义、Kimi、
-# 自定义…) are not offered here; if settings.yaml names one, it is still shown
-# as the current provider and works as before.
-# Order: DeepSeek → 硅基流动 → 阶跃… → xAI → OpenAI. 「＋ 自定义」 is appended in
-# list_providers (not a fixed ProviderSpec row).
+# Coach picker and Provider Hub share the same domestic-first preset inventory.
+# (id, name, tag in the field, tag in the menu, hint). 「＋ 自定义」 is appended.
 PICKER: tuple[tuple[str, str, str, str, str], ...] = (
     ("deepseek", "DeepSeek", "推荐", "默认 · 推荐", ""),
     ("siliconflow", "硅基流动", "OpenAI 兼容", "OpenAI 兼容", "国内直连"),
     ("stepfun_plan", "阶跃 Step Plan", "订阅制", "订阅制", "和“阶跃按量”共用一个阶跃 Key"),
     ("stepfun", "阶跃按量", "按量计费", "按量计费", "自带云端语音识别"),
+    ("dashscope", "通义千问", "国内", "国内", "阿里云百炼 OpenAI 兼容接口"),
+    ("zhipu", "智谱 GLM", "国内", "国内", "智谱开放平台"),
+    ("moonshot", "Kimi", "国内", "国内", "月之暗面开放平台"),
+    ("volcengine", "豆包 / 火山方舟", "国内", "国内", "可填写控制台模型 ID 或接入点 ID"),
+    ("minimax", "MiniMax", "国内", "国内", "MiniMax 国内开放平台"),
+    ("yi", "零一万物 Yi", "国内", "国内", "零一万物开放平台"),
+    ("baichuan", "百川", "国内", "国内", "百川开放平台"),
     ("xai", "xAI (Grok)", "国内需代理", "国内需代理", "SuperGrok 会员不含 API 额度"),
     ("openai", "OpenAI", "国内需代理", "国内需代理", "ChatGPT Plus 不含 API 额度"),
 )
@@ -72,7 +75,7 @@ def shares_key_with(provider_id: str) -> list[str]:
 
 def list_providers(current: str = "", current_configured: bool = False) -> list[dict[str, Any]]:
     """Preset dropdown rows + a trailing 「＋ 自定义」 action. Booleans only."""
-    from dodoclaw.webui import customs, keystore
+    from dodoclaw.webui import customs, keystore, provider_store
 
     cur_raw = (current or "").strip().lower()
     cur = get_provider(cur_raw).id if cur_raw and cur_raw != "custom" else cur_raw
@@ -80,12 +83,13 @@ def list_providers(current: str = "", current_configured: bool = False) -> list[
     out = []
     for pid, name, _tag, menu_tag, hint in PICKER:
         spec = get_provider(pid)
+        connection = provider_store.preset_values(pid)
         configured = keystore.has_key(spec.key_env) or (pid == cur and current_configured)
         # Menu subtitle: host · 已配置/未配置 · hint (design D12)
         host = ""
         try:
             from urllib.parse import urlparse
-            host = (urlparse(spec.base_url).hostname or "") 
+            host = (urlparse(connection["base_url"]).hostname or "")
         except Exception:
             host = ""
         ds_bits = [b for b in (host, ("已配置" if configured else "未配置"), hint) if b]
@@ -93,9 +97,9 @@ def list_providers(current: str = "", current_configured: bool = False) -> list[
             "id": pid,
             "name": name,
             "tag": menu_tag,
-            "model": spec.default_model,
+            "model": connection["model"],
             "models": spec.model_choices(),
-            "base_url": spec.base_url,
+            "base_url": connection["base_url"],
             "configured": bool(configured),
             "shares_key_with": shares_key_with(pid),
             "hint": hint,
@@ -165,9 +169,11 @@ def reload_env_file(path: Path, previously_from_file: set[str]) -> set[str]:
     dropped from the process environment, so removing a line really clears it.
     Returns the set of variable names now present in the file.
     """
+    from dodoclaw.webui.customs import is_custom_key_env
+
     names = env_names_in_file(path)
     for k in previously_from_file - names:
-        if k in KEY_ENVS:
+        if k in KEY_ENVS or is_custom_key_env(k):
             os.environ.pop(k, None)
     if path.exists():
         from dotenv import load_dotenv
@@ -235,9 +241,11 @@ def test_key(
     client_factory: Callable[..., Any] | None = None,
     timeout: float = 15.0,
     extra_body: dict[str, Any] | None = None,
+    provider_id: str = "",
 ) -> dict[str, Any]:
     """One tiny chat completion. Returns {ok, kind, reason_zh, ms} — never the key."""
     from dodoclaw.coach.errors import NO_KEY, classify
+    from dodoclaw.providers import chat_max_tokens, chat_temperature
 
     if not (api_key or "").strip():
         return {"ok": False, "kind": "no_key", "reason_zh": NO_KEY, "ms": None}
@@ -249,7 +257,8 @@ def test_key(
         client.chat.completions.create(
             model=model,
             messages=[{"role": "user", "content": "1"}],
-            max_tokens=8,
+            max_tokens=chat_max_tokens(provider_id, model, default=8),
+            temperature=chat_temperature(provider_id, model, default=1.0),
             extra_body=extra_body or None,
         )
     except Exception as exc:

@@ -39,8 +39,13 @@ REMINDERS: dict[str, tuple[int, int | None]] = {
 
 # Rows the reminder engine has no rule for yet: shown greyed out as 即将上线,
 # always off, cannot be switched on, and not counted in the per-game budget.
-PENDING = frozenset({"shrine", "cube", "roshan", "aegis", "tp"})
+# (Empty since 智慧神龛 / 痛苦魔方 / 肉山 / 不朽盾 / 回城卷轴 got real rules.)
+PENDING: frozenset[str] = frozenset()
 PENDING_MSG = "这条提醒还在做"
+# Rows that were PENDING in earlier builds. Their saved ``on: false`` was forced,
+# not chosen, so unless the user has toggled them since they follow the position
+# defaults instead of the stale value.
+WAS_PENDING = frozenset({"shrine", "cube", "roshan", "aegis", "tp"})
 
 # reminder engine key family -> settings row
 FAMILY_TO_ROW = {
@@ -56,6 +61,7 @@ FAMILY_TO_ROW = {
     "no_tp": "tp",
     "buyback_ready": "buyback",
     "buyback_while_dead": "buyback",
+    "buyback_short": "buyback",
     "low_hp": "lowhp",
     "ult_ready": "lowhp",
 }
@@ -107,12 +113,15 @@ def merge(saved: dict[str, Any] | None) -> dict[str, Any]:
     saved = saved if isinstance(saved, dict) else {}
     pos = [p for p in (saved.get("positions") or []) if p in POSITIONS] or [1]
     out = defaults(pos)
+    overrides = [k for k in (saved.get("overrides") or []) if k in REMINDERS and k not in PENDING]
     for k, v in (saved.get("reminders") or {}).items():
         if k in out["reminders"] and isinstance(v, dict):
+            if k in WAS_PENDING and k not in overrides:
+                continue  # keep the position default (see WAS_PENDING)
             if "on" in v and k not in PENDING:
                 out["reminders"][k]["on"] = bool(v["on"])
             # lead times are not user-editable until the engine supports them
-    out["overrides"] = [k for k in (saved.get("overrides") or []) if k in REMINDERS and k not in PENDING]
+    out["overrides"] = overrides
     for k in ("voice_ask", "tts_on", "auto_overlay", "reduce_motion"):
         if saved.get(k) is not None:
             out[k] = bool(saved[k])

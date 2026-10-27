@@ -5,6 +5,21 @@ import time
 from dataclasses import dataclass, field
 from typing import Any
 
+GAME_STATE_ZH = {
+    "DOTA_GAMERULES_STATE_INIT": "准备中",
+    "DOTA_GAMERULES_STATE_WAIT_FOR_PLAYERS_TO_LOAD": "加载中",
+    "DOTA_GAMERULES_STATE_HERO_SELECTION": "选人中",
+    "DOTA_GAMERULES_STATE_STRATEGY_TIME": "策略时间",
+    "DOTA_GAMERULES_STATE_TEAM_SHOWCASE": "展示阵容",
+    "DOTA_GAMERULES_STATE_WAIT_FOR_MAP_TO_LOAD": "等待载入地图",
+    "DOTA_GAMERULES_STATE_PRE_GAME": "出兵前",
+    "DOTA_GAMERULES_STATE_GAME_IN_PROGRESS": "对局中",
+    "DOTA_GAMERULES_STATE_POST_GAME": "对局结束",
+}
+TEAM_ZH = {"radiant": "天辉", "dire": "夜魇"}
+# talents, map helpers and hidden slots GSI lists next to real spells
+_HIDDEN_ABILITY_PREFIXES = ("special_bonus", "plus_", "generic_hidden", "ability_")
+
 
 @dataclass
 class GameSnapshot:
@@ -62,45 +77,121 @@ class GameSnapshot:
         t = abs(t)
         return f"{sign}{t // 60:02d}:{t % 60:02d}"
 
+    # ── items / abilities by slot ───────────────────────
+    def _items_in(self, *prefixes: str) -> list[dict[str, Any]]:
+        return [
+            i
+            for i in self.items
+            if str(i.get("slot") or "").startswith(prefixes)
+            and (i.get("name") or "empty") != "empty"
+        ]
+
+    @property
+    def inventory(self) -> list[dict[str, Any]]:
+        """Main six slots (slot0-slot5)."""
+        return [
+            i
+            for i in self._items_in("slot")
+            if _as_int(str(i.get("slot"))[4:], 99) < 6
+        ]
+
+    @property
+    def backpack(self) -> list[dict[str, Any]]:
+        return [
+            i
+            for i in self._items_in("slot")
+            if _as_int(str(i.get("slot"))[4:], -1) >= 6
+        ]
+
+    @property
+    def stash(self) -> list[dict[str, Any]]:
+        return self._items_in("stash")
+
+    @property
+    def neutral_items(self) -> list[dict[str, Any]]:
+        return self._items_in("neutral")
+
+    @property
+    def has_tp(self) -> bool | None:
+        """True if a usable TP is carried (scroll or Boots of Travel).
+
+        None when the payload has no TP slot at all (can't tell)."""
+        if any(str(i.get("name") or "").startswith("item_travel_boots") for i in self.inventory):
+            return True
+        tele = [i for i in self.items if str(i.get("slot") or "").startswith("teleport")]
+        if not tele:
+            return None
+        return any(
+            i.get("name") == "item_tpscroll" and _as_int(i.get("charges"), 1) > 0 for i in tele
+        )
+
+    @property
+    def can_buyback(self) -> bool:
+        return self.buyback_cooldown <= 0 and 0 < self.buyback_cost <= self.gold
+
+    @property
+    def real_abilities(self) -> list[dict[str, Any]]:
+        """Hero spells only (drops talents and map / hidden helper abilities)."""
+        out = []
+        for a in self.abilities:
+            name = str(a.get("name") or a.get("ability") or "")
+            if not name or name.startswith(_HIDDEN_ABILITY_PREFIXES):
+                continue
+            out.append(a)
+        return out
+
     def summary_for_llm(self) -> str:
+        """Compact Chinese situation report for the coach prompt."""
         if not self.raw:
             return "当前没有收到 Dota 2 GSI 数据（可能未开对局或未配置 GSI）。"
 
-        lines = [
-            f"地图: {self.map_name or 'unknown'}",
-            f"阶段: {self.game_state or 'unknown'}",
-            f"比赛时间: {self.clock_mmss} ({self.clock_time}s)",
-            f"昼夜: {self.daytime}",
-            f"玩家: {self.player_name} / {self.player_team}",
-            f"英雄: {self.hero_name} Lv{self.hero_level} "
-            f"{'存活' if self.hero_alive else f'阵亡(复活{self.respawn_seconds}s)'}",
-            f"生命: {self.hero_health}/{self.hero_max_health}  魔法: {self.hero_mana}/{self.hero_max_mana}",
-            f"经济: 总金 {self.gold} (可靠 {self.gold_reliable} / 不可靠 {self.gold_unreliable}) "
-            f"GPM {self.gpm} XPM {self.xpm}",
-            f"KDA: {self.kills}/{self.deaths}/{self.assists}  LH/DN: {self.last_hits}/{self.denies}",
-            f"买活: 花费 {self.buyback_cost}  CD {self.buyback_cooldown}s",
-        ]
+        from dodoclaw.names import hero_key, hero_zh
 
-        if self.abilities:
-            ab = []
-            for a in self.abilities:
-                name = a.get("name") or a.get("ability") or "?"
-                cd = a.get("cooldown", 0)
-                ul = a.get("ultimate", False)
-                ab.append(f"{name}(cd={cd}{' ult' if ul else ''})")
-            lines.append("技能: " + ", ".join(ab))
+        stage = GAME_STATE_ZH.get(self.game_state, self.game_state or "未知")
+        day = "" if self.daytime is None else (" 白天" if self.daytime else " 夜晚")
+        lines = [f"阶段: {stage}  比赛时间 {self.clock_mmss}{day}"]
+
+        if self.hero_name:
+            hk = hero_key(self.hero_name)
+            team = TEAM_ZH.get(self.player_team.lower(), self.player_team) or "未知阵营"
+            state = "存活" if self.hero_alive else f"阵亡，{self.respawn_seconds}s 后复活"
+            hp = f"{self.hero_health}/{self.hero_max_health}"
+            if self.hero_max_health:
+                hp += f"({round(100 * self.hero_health / self.hero_max_health)}%)"
+            lines.append(
+                f"我: {hero_zh(hk)}({hk}) {self.hero_level}级 {team} {state}  "
+                f"生命 {hp}  魔法 {self.hero_mana}/{self.hero_max_mana}"
+            )
+        lines.append(
+            f"经济: {self.gold} 金 (可靠 {self.gold_reliable})  GPM {self.gpm}  XPM {self.xpm}  "
+            f"KDA {self.kills}/{self.deaths}/{self.assists}  正补/反补 {self.last_hits}/{self.denies}"
+        )
+        if self.buyback_cost:
+            if self.buyback_cooldown > 0:
+                bb = f"冷却中 {self.buyback_cooldown}s"
+            elif self.can_buyback:
+                bb = "可用"
+            else:
+                bb = f"差 {self.buyback_cost - self.gold} 金"
+            lines.append(f"买活: {self.buyback_cost} 金，{bb}")
+
+        spells = [_ability_text(a) for a in self.real_abilities]
+        if spells:
+            lines.append("技能: " + "，".join(spells))
+
+        def _row(label: str, items: list[dict[str, Any]]) -> None:
+            if items:
+                lines.append(f"{label}: " + "，".join(_item_text(i) for i in items))
 
         if self.items:
-            it = []
-            for i in self.items:
-                name = i.get("name") or "?"
-                if name and name != "empty":
-                    it.append(name)
-            lines.append("物品: " + (", ".join(it) if it else "无"))
-
-        draft = self.raw.get("draft") if self.raw else None
-        if isinstance(draft, dict) and draft:
-            lines.append(f"Draft 原始字段数: {len(draft)}（详见 BP 指导模块）")
+            inv = self.inventory
+            lines.append("物品栏: " + ("，".join(_item_text(i) for i in inv) if inv else "空"))
+            _row("背包", self.backpack)
+            _row("中立物品", self.neutral_items)
+            _row("储藏处(未带在身上)", self.stash)
+            tp = self.has_tp
+            if tp is not None:
+                lines.append("回城卷轴: " + ("有" if tp else "没有"))
 
         return "\n".join(lines)
 
@@ -124,6 +215,36 @@ def _as_int(v: Any, default: int = 0) -> int:
         return int(v)
     except (TypeError, ValueError):
         return default
+
+
+def _ability_text(a: dict[str, Any]) -> str:
+    name = str(a.get("name") or a.get("ability") or "?")
+    lvl = _as_int(a.get("level"))
+    if lvl <= 0:
+        return f"{name}(未学)"
+    bits = [f"{lvl}级"]
+    if a.get("ultimate"):
+        bits.append("大招")
+    if a.get("passive"):
+        bits.append("被动")
+    else:
+        cd = _as_int(a.get("cooldown"))
+        bits.append(f"冷却{cd}s" if cd > 0 else "就绪")
+    return f"{name}({' '.join(bits)})"
+
+
+def _item_text(i: dict[str, Any]) -> str:
+    from dodoclaw.names import item_label
+
+    text = item_label(str(i.get("name") or ""))
+    extra = []
+    charges = _as_int(i.get("charges"), -1)
+    if charges >= 0 and "charges" in i:
+        extra.append(f"{charges}层")
+    cd = _as_int(i.get("cooldown"))
+    if cd > 0:
+        extra.append(f"冷却{cd}s")
+    return f"{text}({' '.join(extra)})" if extra else text
 
 
 def parse_gsi_payload(payload: dict[str, Any]) -> GameSnapshot:
@@ -174,14 +295,16 @@ def parse_gsi_payload(payload: dict[str, Any]) -> GameSnapshot:
         snap.respawn_seconds = _as_int(h.get("respawn_seconds"))
 
     abilities = payload.get("abilities") or {}
-    for key, val in abilities.items():
-        if isinstance(val, dict) and (val.get("name") or val.get("ability")):
-            snap.abilities.append(val)
+    if isinstance(abilities, dict):
+        for key, val in abilities.items():
+            if isinstance(val, dict) and (val.get("name") or val.get("ability")):
+                snap.abilities.append({**val, "slot": key})
 
     items = payload.get("items") or {}
-    for key, val in items.items():
-        if isinstance(val, dict) and val.get("name"):
-            snap.items.append(val)
+    if isinstance(items, dict):
+        for key, val in items.items():
+            if isinstance(val, dict) and val.get("name"):
+                snap.items.append({**val, "slot": key})
 
     return snap
 

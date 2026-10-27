@@ -1,5 +1,5 @@
 <!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><title>DoDoClaw · 设置</title>
-<link rel="stylesheet" href="tokens.css"><link rel="stylesheet" href="shell.css">
+<link rel="stylesheet" href="tokens.css"><link rel="stylesheet" href="shell.css"><link rel="stylesheet" href="provider-hub.css">
 <style>
 .page{display:grid;grid-template-columns:184px 1fr;gap:16px}
 .snav{padding:14px 10px;display:flex;flex-direction:column;gap:2px}
@@ -185,6 +185,7 @@ a.link{text-decoration:none}
   <span class="label">设置</span>
   <a data-s="rem"><svg class="ico"><use href="#clock"/></svg>提醒</a>
   <a data-s="coach"><svg class="ico"><use href="#chat"/></svg><span style="white-space:nowrap">教练与语音</span><span class="dot warn" id="snav-coach-dot" style="margin-left:auto;display:none"></span></a>
+  <a data-s="providers"><svg class="ico"><use href="#cube"/></svg><span>服务商管理</span></a>
   <a data-s="overlay"><svg class="ico"><use href="#layers"/></svg>小窗与动效</a>
   <a data-s="adv"><svg class="ico"><use href="#key"/></svg>高级</a>
   <a data-s="about"><svg class="ico"><use href="#info"/></svg>关于</a>
@@ -197,7 +198,7 @@ a.link{text-decoration:none}
   <div class="card posbar">
    <div><div class="label" style="margin-bottom:6px">常玩位置 · 可多选</div>
     <div class="seg" id="pos"><span data-p="all">全部</span><span class="num" data-p="1">1</span><span class="num" data-p="2">2</span><span class="num" data-p="3">3</span><span class="num" data-p="4">4</span><span class="num" data-p="5">5</span></div></div>
-   <div class="hint" style="max-width:230px">改位置会重设默认开关，你手动改过的不动。标“即将上线”的提醒还在做，不计入条数。</div>
+   <div class="hint" style="max-width:230px">改位置会重设默认开关，你手动改过的不动。</div>
    <div class="budget" id="budget"><div style="text-align:right"><div class="label">预计一局</div><div class="n num"><span id="bud-n">0</span><small>/ <span id="bud-cap">30</span> 条</small></div></div><div><div class="meter"><i id="bud-bar" style="width:0"></i></div><div class="bud-hint" id="bud-hint"></div></div></div>
   </div>
   <div class="rtable">
@@ -209,7 +210,7 @@ a.link{text-decoration:none}
 
  <!-- ===== 教练与语音 ===== -->
  <section class="glass pane" id="p-coach">
-  <div class="ptop"><div><div class="ph1">教练与语音</div><div class="sub">教练、识别、播报各选各的服务商。Key 在“AI 教练”里填，只保存在这台电脑上，不会显示出来。</div></div><span class="saved"><svg class="ico"><use href="#check"/></svg>已保存</span></div>
+  <div class="ptop"><div><div class="ph1">教练与语音</div><div class="sub">教练、识别、播报各选各的服务商。接口地址、模型和 API Key 在“服务商管理”中统一配置。</div></div><span class="saved"><svg class="ico"><use href="#check"/></svg>已保存</span></div>
   <div class="card" id="c-coach" data-ks="none">
    <div class="callout info fromv" id="fromv" style="padding:8px 12px;margin-bottom:10px"><svg class="ico" style="width:16px;height:16px"><use href="#info"/></svg><div class="d" style="margin:0" id="fromv-txt">—</div></div>
    <div class="ch"><span class="gl gi" style="background:rgba(229,72,47,.12);color:var(--brand-2)"><svg class="ico"><use href="#chat"/></svg></span><div><div class="t">AI 教练</div><div class="d">提问和赛后建议要用；不配也能用全部提醒</div></div><div class="r" id="coach-pill"></div></div>
@@ -223,6 +224,7 @@ a.link{text-decoration:none}
     </div>
      <div class="ddmenu" id="prov-menu" role="listbox" aria-label="服务商" style="left:144px;top:46px" hidden></div>
     </div>
+    <div class="coach-provider-summary"><div><span id="coach-provider-summary" class="hint">在服务商管理中配置接口和 API Key</span><div class="hint">配置会保留，切换服务商后不用重复填写。</div></div><button class="btn ghost sm" type="button" id="btn-provider-manage"><svg class="ico"><use href="#key"/></svg>配置服务商</button></div>
     <!-- 模型 ID（预设可改；自定义在表单里填） -->
     <div class="row" id="c-model-row"><span class="k">模型 ID</span><div class="v">
      <div id="mdl-wrap"><input class="field" id="mdl-in" list="mdl-list" style="width:280px;height:36px;padding:0 12px" placeholder="模型 ID" maxlength="200" autocomplete="off"><datalist id="mdl-list"></datalist></div>
@@ -335,6 +337,33 @@ a.link{text-decoration:none}
   </div>
  </section>
 
+ <!-- ===== 服务商管理 ===== -->
+ <section class="glass pane" id="p-providers" aria-labelledby="hub-title">
+  <div class="ptop hub-top"><div><div class="hub-eyebrow">PROVIDER HUB</div><h1 class="ph1" id="hub-title">服务商管理</h1><div class="sub">统一配置接口地址、模型和 API Key，供 AI 教练与云端语音使用。</div></div><button class="btn ghost sm" id="hub-add" type="button"><svg class="ico"><use href="#plus"/></svg>添加自定义</button></div>
+  <div class="hub-overview"><span><span class="dot ok"></span><b id="hub-config-count">0</b> 家已配置</span><span class="hub-active">当前教练：<b id="hub-active-name">—</b></span><span class="hint">保存配置后，可单独设为 AI 教练</span></div>
+  <div class="hub-layout">
+   <aside class="hub-catalog" aria-label="服务商列表">
+    <label class="hub-search"><svg class="ico"><use href="#search"/></svg><input id="hub-search" type="search" placeholder="搜索服务商" aria-label="搜索服务商" autocomplete="off"></label>
+    <div id="hub-list"><div class="hub-empty">正在读取服务商…</div></div>
+   </aside>
+   <div class="hub-editor card" id="hub-editor" hidden>
+    <div class="hub-editor-head"><span class="hub-logo" id="hub-logo" aria-hidden="true">P</span><div class="hub-heading"><h2 id="hub-provider-name">服务商</h2><div class="hub-tags"><span class="pill mute tiny" id="hub-provider-type">OpenAI 兼容</span><span class="pill warn tiny" id="hub-key-status">未配置 Key</span><span class="hub-dirty" id="hub-dirty" hidden>有未保存的修改</span></div></div><button type="button" class="hub-text-btn" id="hub-apply" hidden>获取 Key <svg class="ico"><use href="#ext"/></svg></button></div>
+    <p class="hub-note" id="hub-note"></p>
+    <form id="hub-form" autocomplete="off">
+     <div class="hub-field" id="hub-name-row" hidden><label for="hub-name">名称</label><input class="field" id="hub-name" maxlength="40" placeholder="例如：我的模型服务"><span class="hub-error" id="hub-error-name" hidden></span></div>
+     <div class="hub-field"><div class="hub-label-row"><label for="hub-url">接口地址 <span>Base URL</span></label><button type="button" class="hub-text-btn" id="hub-reset-url" hidden>恢复默认</button></div><input class="field hub-mono" id="hub-url" type="url" maxlength="2048" placeholder="https://api.example.com/v1" spellcheck="false"><span class="hint">填写 API 根地址，无需添加 /chat/completions。</span><span class="hub-error" id="hub-error-url" hidden></span></div>
+     <div class="hub-field"><div class="hub-label-row"><label for="hub-model">模型 ID</label><button type="button" class="hub-text-btn" id="hub-reset-model" hidden>恢复默认</button></div><input class="field hub-mono" id="hub-model" list="hub-models" maxlength="200" placeholder="填写平台提供的模型 ID" spellcheck="false"><datalist id="hub-models"></datalist><span class="hint">可从建议中选择，也可以直接输入任意对话模型 ID。</span><span class="hub-error" id="hub-error-model" hidden></span></div>
+     <div class="hub-field"><div class="hub-label-row"><label for="hub-key">API Key</label><span class="hint" id="hub-key-action">待填写</span></div><div class="hub-password"><svg class="ico"><use href="#key"/></svg><input id="hub-key" type="password" autocomplete="new-password" autocapitalize="off" spellcheck="false" maxlength="512" placeholder="粘贴 API Key"><button type="button" id="hub-eye" aria-label="显示输入的 API Key" aria-pressed="false"><svg class="ico"><use href="#eye"/></svg></button></div><span class="hint" id="hub-key-hint">Key 只保存在这台电脑上；保存后输入框会清空。</span><span class="hub-error" id="hub-error-key" hidden></span></div>
+     <div class="hub-result" id="hub-result" role="status" aria-live="polite" hidden></div>
+     <div class="hub-save-actions"><button type="submit" class="btn primary sm" id="hub-save-test">保存并测试</button><button type="button" class="btn ghost sm" id="hub-save">仅保存</button><button type="button" class="hub-text-btn" id="hub-test">测试已保存配置</button></div>
+    </form>
+    <div class="hub-use"><div><strong id="hub-use-title">供 AI 教练使用</strong><p class="hint">保存多家配置，按需选择当前使用的一家。</p></div><button type="button" class="btn ghost sm" id="hub-activate">用于 AI 教练<svg class="ico"><use href="#send"/></svg></button></div>
+    <div class="hub-danger-actions"><button type="button" class="hub-text-btn danger" id="hub-delete-key" hidden>删除 Key</button><button type="button" class="hub-text-btn danger" id="hub-delete-custom" hidden>删除此服务商</button></div>
+   </div>
+   <div class="hub-empty hub-load-error" id="hub-load-error" hidden>暂时无法读取服务商配置。<button type="button" class="hub-text-btn" id="hub-retry">重新读取</button></div>
+  </div>
+ </section>
+
  <!-- ===== 小窗与动效 ===== -->
  <section class="glass pane" id="p-overlay">
   <div class="ptop"><div><div class="ph1">小窗与动效</div><div class="sub">对局中的置顶小窗。Dota 要用“无边框窗口”模式，独占全屏时小窗盖不上去，但播报照常。</div></div><span class="saved"><svg class="ico"><use href="#check"/></svg>已保存</span></div>
@@ -395,5 +424,5 @@ a.link{text-decoration:none}
 </div></div>
 <div id="toast"></div>
 </div>
-<script src="common.js"></script><script src="settings.js"></script>
+<script src="common.js"></script><script src="provider-hub.js"></script><script src="settings.js"></script>
 </body></html>

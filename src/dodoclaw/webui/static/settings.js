@@ -9,14 +9,14 @@ const ROWS = {
   runes: { n: '河道神符', s: '水符 2:00 / 4:00，强化符 6:00 起每 2 分 · 所有位置可开，2 号位默认开', ico: 'rune' },
   lotus: { n: '莲花池', s: '6:00 起每 6 分钟整点提醒 · 所有位置可开，3、4、5 号位默认开', ico: 'spark', fixed: '整点提醒，没有提前量' },
   shrine: { n: '智慧神龛', s: '7:00 起每 7 分钟', ico: 'shrine' },
-  cube: { n: '痛苦魔方', s: '15:00 首刷及每次复活 · “魔方 30 秒后刷新”', ico: 'cube', cls: 'warm' },
+  cube: { n: '痛苦魔方', s: '15:00 首刷前 30 秒 · “魔方 30 秒后刷新”（复活时间 GSI 看不到）', ico: 'cube', cls: 'warm' },
   roshan: { n: '肉山复活', s: '最早复活时间前提醒 · “肉山快复活了”', ico: 'skull', cls: 'warm' },
   aegis: { n: '不朽盾', s: '捡盾后 4:00 报 · “盾还剩 1 分钟”', item: 'aegis', label: '不朽盾' },
   tp: { n: '没带回城卷轴', s: '10:00、20:00 各检查一次，每局最多 2 次', item: 'tpscroll', label: '回城', fixed: '固定时间检查，没有提前量' },
   buyback: { n: '后期买活', s: '25 分钟后变为可用 / 买大件后钱不够买活', ico: 'heart', cls: 'gold', fixed: '状态变化时报，没有提前量' },
   lowhp: { n: '低血量 · 大招就绪', s: '默认关，开了会多不少播报，不计入上面的条数', ico: 'alert', fixed: '即时触发' },
 };
-const PANES = ['rem', 'coach', 'overlay', 'adv', 'about'];
+const PANES = ['rem', 'coach', 'providers', 'overlay', 'adv', 'about'];
 
 function flashSaved() { document.querySelectorAll('.pane.on .saved').forEach(e => { e.classList.add('on'); clearTimeout(e._t); e._t = setTimeout(() => e.classList.remove('on'), 1500); }); }
 async function save(patch) {
@@ -27,9 +27,10 @@ async function save(patch) {
 }
 function setSlider(el, pct) { el.querySelector('.fl').style.width = pct + '%'; el.querySelector('.th').style.left = pct + '%'; }
 function show(sec) {
-  const pane = sec === 'voice' ? 'coach' : (PANES.includes(sec) ? sec : 'rem');
+  const pane = ['voice', 'stt', 'tts'].includes(sec) ? 'coach' : (PANES.includes(sec) ? sec : 'rem');
   document.querySelectorAll('.pane').forEach(p => p.classList.toggle('on', p.id === 'p-' + pane));
   document.querySelectorAll('.snav a').forEach(a => a.classList.toggle('on', a.dataset.s === pane));
+  if (pane === 'providers') { ProviderHub.wire(); ProviderHub.load(); }
   if (sec === 'voice' || sec === 'stt') { const c = $('#c-stt'); c.scrollIntoView({ block: 'nearest' }); c.classList.remove('flash'); void c.offsetWidth; c.classList.add('flash'); }
   if (sec === 'tts') { const c = $('#c-tts'); c.scrollIntoView({ block: 'nearest' }); c.classList.remove('flash'); void c.offsetWidth; c.classList.add('flash'); }
 }
@@ -116,7 +117,7 @@ function renderProvMenu(s) {
     }
     const ds = p.subtitle || [p.model, p.configured ? '已配置' : '未配置', p.hint].filter(Boolean).join(' · ');
     return `<div class="mi${p.current ? ' cur' : ''}" role="option" aria-selected="${p.current}" data-v="${esc(p.id)}">${CK}<div><div class="nm">${esc(p.name)}${tagPill(p.tag, p.id === 'deepseek')}</div><div class="ds">${esc(ds)}</div></div>${p.apply_url ? `<span class="link ap" data-apply="${esc(p.id)}">去申请 ${EXT}</span>` : ''}</div>`;
-  }).join('') + '<div class="ft">每家的 Key 分开保存，切换不会清掉别家的。<br>通义、Kimi 也可通过自定义接入。</div>';
+  }).join('') + '<div class="ft">切换后立即用于 AI 教练。<br>在“服务商管理”中统一配置地址、模型和 Key。</div>';
   if (k.is_custom) $('#prov-menu .ft').insertAdjacentHTML('afterbegin', `现在用的是自定义「${esc(k.provider_name)}」。<br>`);
   else if (!k.in_picker) $('#prov-menu .ft').insertAdjacentHTML('afterbegin', `现在用的是 ${esc(k.provider_name)}。<br>`);
 }
@@ -241,6 +242,7 @@ function openCustomForm(id) {
 
 function renderCoach(s) {
   const k = s.key, v = s.voice;
+  $('#coach-provider-summary').textContent = `${k.provider_name || '服务商'} · ${k.configured ? 'API Key 已配置' : '尚未配置 API Key'}${k.model ? ' · ' + k.model : ''}`;
   const pane = (() => {
     // Keep form open while editing
     if ($('#c-coach').dataset.pane === 'custom-form' && customFormId !== undefined) return 'custom-form';
@@ -604,12 +606,18 @@ function setEye(show) {
 }
 function resetKeyInput() { $('#key-in').value = ''; setEye(false); saveErr = ''; saveKind = ''; renderFillErr(); }
 
+function resetCoachConfigView() {
+  clearTimeout(switchTimer); testSeq++; busy = null; localTest = null; changing = false;
+  customFormId = undefined; $('#c-coach').dataset.pane = '';
+  resetKeyInput();
+}
+
 // 选中即生效：写服务商和默认模型，热重载，没有确认框。
 // 换到有 Key 的一家马上显示“测试中”，停手 0.4 秒后只测最后选中的那一家。
 async function pickProvider(id) {
   if (S.voice && S.voice.key_fill) return toast('正在给语音填 Key，服务商已锁定；保存后会自动回去', { icon: 'info' });
   if (busy === 'save' || customBusy) return toast('正在保存 Key，等一下再换', { icon: 'info' });
-  if (id === '__add_custom__') { openCustomForm(''); return; }
+  if (id === '__add_custom__') { ProviderHub.open('__add_custom__'); return; }
   // Leaving the custom form
   if ($('#c-coach').dataset.pane === 'custom-form') { customFormId = undefined; }
   clearTimeout(switchTimer);
@@ -732,6 +740,7 @@ async function refresh() {
 
 onReady(async () => {
   wireChrome(() => lastS);
+  ProviderHub.wire();
   show(location.hash.slice(1));
   window.addEventListener('hashchange', () => show(location.hash.slice(1)));
   document.querySelectorAll('.snav a').forEach(a => a.onclick = () => { location.hash = a.dataset.s; });
@@ -754,6 +763,7 @@ onReady(async () => {
     } else if (!(await api()[act]())) toast('没能打开文件夹，详情见日志', { icon: 'alert' });
   });
   wireCoach();
+  $('#btn-provider-manage').onclick = () => ProviderHub.open(S?.key?.is_custom ? 'custom:' + S.key.custom_id : S?.key?.provider);
   // voice (D13 dropdowns)
   const noTts = () => toast('缺少声音组件，提醒照常显示，只是不念出来。换最新安装包即可恢复', { icon: 'alert' });
   function closeVoiceMenus() {
@@ -839,16 +849,7 @@ onReady(async () => {
       if (retry) { await api().start_whisper_download(); refresh(); return; }
       return;
     }
-    const pid = go.dataset.fill, purpose = go.dataset.purpose || 'stt';
-    const r = await api().begin_key_fill(pid, purpose);
-    if (!r || !r.ok) { toast((r && r.msg) || '打不开填 Key', { icon: 'alert' }); return; }
-    changing = true; // show password row
-    $('#key-in').value = '';
-    await refresh();
-    const c = $('#c-coach');
-    c.scrollIntoView({ block: 'start' });
-    c.classList.remove('flash'); void c.offsetWidth; c.classList.add('flash');
-    setTimeout(() => { try { $('#key-in').focus(); } catch (_) {} }, 50);
+    await ProviderHub.open(go.dataset.fill);
   });
   $('#btn-fill-apply').onclick = async () => {
     const f = S.voice && S.voice.key_fill; if (!f) return;
@@ -871,7 +872,6 @@ onReady(async () => {
   $('#btn-update').onclick = () => toast('检查更新还在做，新版本会发在社区里');
   await refresh();
   poll(s => { lastS = s; renderTopbar(s); applyMotion(s); }, 1500);
-  setInterval(() => { if (document.querySelector('#p-adv.on')) 
 // D12: model override, custom form, whisper download
 $('#mdl-in').addEventListener('change', async () => {
   const r = await api().save_coach_model($('#mdl-in').value.trim());
@@ -916,8 +916,6 @@ $('#btn-cf-save').onclick = async () => {
   await refresh();
   if (r.ok) $('#c-coach').dataset.pane = 'custom';
 };
-$('#btn-dl-cancel').onclick = async () => { await api().cancel_whisper_download(); await refresh(); };
-$('#btn-dl-retry').onclick = async () => { await api().start_whisper_download(); await refresh(); };
-
-refresh(); }, 2000);
+// Download buttons are created by renderVoice and handled by delegation above.
+  setInterval(() => { if (document.querySelector('#p-adv.on')) refresh(); }, 2000);
 });

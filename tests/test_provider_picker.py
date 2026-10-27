@@ -15,6 +15,7 @@ from types import SimpleNamespace
 
 import openai
 import pytest
+import yaml
 from dotenv import dotenv_values
 
 from dodoclaw import config, service
@@ -209,12 +210,13 @@ def test_hand_written_env_keys_still_resolve(tmp_path, monkeypatch):
 
 
 # ── provider list / links ────────────────────────────────
-def test_picker_is_exactly_the_five_d10_providers():
+def test_picker_includes_domestic_presets_and_key_sharing():
     rows = keycheck.list_providers("deepseek")
     ids = [r["id"] for r in rows]
     assert ids[:2] == ["deepseek", "siliconflow"]
     assert ids[-1] == "__add_custom__"
     assert "stepfun_plan" in ids and "openai" in ids
+    assert {"dashscope", "zhipu", "moonshot", "volcengine", "minimax", "yi", "baichuan"} <= set(ids)
     by = {r["id"]: r for r in rows if r["id"] != "__add_custom__"}
     assert by["deepseek"]["tag"] == "默认 · 推荐" and by["deepseek"]["current"]
     assert by["siliconflow"]["name"] == "硅基流动" and "国内需代理" not in by["siliconflow"]["tag"]
@@ -239,7 +241,7 @@ def test_apply_links_go_to_key_pages():
     assert get_provider("stepfun_plan").topup_url() == "https://platform.stepfun.com/step-plan"
     assert get_provider("deepseek").topup_url() == "https://platform.deepseek.com/top_up"
     assert get_provider("xai").topup_url() == "https://console.x.ai"  # no billing page known: key page
-    assert get_provider("moonshot").apply_url() == get_provider("moonshot").docs_url  # no key_url: docs
+    assert get_provider("moonshot").apply_url() == "https://platform.kimi.com/console/api-keys"
 
 
 def test_open_key_page_uses_provider_and_purpose(world, monkeypatch):
@@ -332,8 +334,9 @@ def test_switch_provider_persists_and_reload_picks_it_up(world):
     r = b.set_provider("deepseek")
     assert r["ok"] and r["msg"] == "" and r["provider"] == "deepseek" and r["model"] == "deepseek-flash"
     text = world.yaml.read_text(encoding="utf-8")
-    # coach.provider + coach.model (that provider's default) written; everything else kept
-    assert 'provider: "deepseek"' in text and 'model: "deepseek-flash"' in text and "step-3.5-flash" not in text
+    # The active choice changes; the previous preset's model remains available.
+    assert 'provider: "deepseek"' in text and 'model: "deepseek-flash"' in text
+    assert yaml.safe_load(text)["provider_configs"]["stepfun_plan"]["model"] == "step-3.5-flash"
     assert "# DoDoClaw settings — keep this comment" in text and "# provider comment stays" in text
     assert "max_reply_chars: 400" in text and "positions:" in text
     # live coach client, no restart
@@ -346,7 +349,7 @@ def test_switch_provider_persists_and_reload_picks_it_up(world):
     assert k["provider_name"] == "DeepSeek" and k["key_env"] == "DEEPSEEK_API_KEY" and "source" not in k
     # and back: StepFun's key is still there
     assert b.set_provider("stepfun_plan")["key"]["configured"] is True
-    assert svc.coach.api_key == OLD and svc.coach.model == "step-3.7-flash"
+    assert svc.coach.api_key == OLD and svc.coach.model == "step-3.5-flash"
     assert b.settings_state()["key"]["switched_from"] is None
 
 
@@ -362,7 +365,7 @@ def test_step_plan_and_pay_as_you_go_share_one_key(world):
 
 def test_switch_rejects_unknown_provider_and_keeps_yaml(world):
     before = world.yaml.read_bytes()
-    for bad in ("evil; rm -rf", "moonshot", "custom"):  # other presets live in settings.yaml, not this dropdown
+    for bad in ("evil; rm -rf", "unknown", "custom"):
         r = world.b.set_provider(bad)
         assert r["ok"] is False and r["msg"] == "没有这个服务商"
     assert world.yaml.read_bytes() == before

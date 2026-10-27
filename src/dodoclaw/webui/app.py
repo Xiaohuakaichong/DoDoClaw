@@ -14,6 +14,10 @@ import time
 from pathlib import Path
 from typing import Any
 
+# name tables are shared with the coach prompt; hero_zh / item_zh stay importable from here
+from dodoclaw.names import hero_key as _hero_key
+from dodoclaw.names import hero_zh, item_zh  # noqa: F401
+
 logger = logging.getLogger(__name__)
 
 STATIC = Path(__file__).resolve().parent / "static"
@@ -87,48 +91,6 @@ def _open_path(path: Path) -> bool:
     except Exception:
         logger.exception("open folder failed")
         return False
-
-
-def _hero_key(name: str) -> str:
-    return (name or "").replace("npc_dota_hero_", "")
-
-
-_ITEM_ZH: dict[str, str] | None = None
-
-
-def item_zh(key: str) -> str:
-    """Chinese item name from data/item_names_zh.json (Valve datafeed, schinese)."""
-    global _ITEM_ZH
-    if _ITEM_ZH is None:
-        import json
-
-        try:
-            path = Path(__file__).resolve().parents[1] / "data" / "item_names_zh.json"
-            _ITEM_ZH = json.loads(path.read_text(encoding="utf-8"))
-        except Exception:
-            _ITEM_ZH = {}
-    k = (key or "").removeprefix("item_")
-    return _ITEM_ZH.get(k, "物品")
-
-
-_HERO_ZH: dict[str, str] | None = None
-
-
-def hero_zh(key: str) -> str:
-    """Chinese display name from data/hero_aliases.json (falls back to the key)."""
-    global _HERO_ZH
-    if _HERO_ZH is None:
-        import json
-
-        _HERO_ZH = {}
-        try:
-            path = Path(__file__).resolve().parents[1] / "data" / "hero_aliases.json"
-            data = json.loads(path.read_text(encoding="utf-8"))
-            for h in data.get("heroes") or []:
-                _HERO_ZH[_hero_key(h.get("key", ""))] = h.get("name_zh") or ""
-        except Exception:
-            logger.exception("hero_aliases.json load failed")
-    return _HERO_ZH.get(key) or key
 
 
 def _preview_voice_zh(configured: str) -> str:
@@ -239,7 +201,9 @@ class Bridge:
         m = raw.get("map") or {}
         age = time.time() - snap.updated_at if snap.updated_at else None
         online = age is not None and age < 35  # GSI heartbeat is 30s
-        items = [i.get("name", "") for i in snap.items[:6]]
+        # main six slots only (not backpack / stash / TP); old payloads had no slot info
+        inv = snap.inventory if any("slot" in i for i in snap.items) else snap.items[:6]
+        items = [i.get("name", "") for i in inv]
         alert = self._alert if self._alert and time.time() - self._alert["at"] < 8 else {}
         key_ok = bool((svc.coach.api_key or "").strip())
         cerr = self._coach_err
@@ -839,11 +803,181 @@ class Bridge:
         return msg
 
     def list_providers(self) -> list[dict[str, Any]]:
-        """服务商 dropdown: the five presets with booleans only (README D10 js_api)."""
+        """Coach picker presets with booleans only; credentials stay in Python."""
         from dodoclaw.webui import keycheck
 
         configured = bool((self._svc.coach.api_key or "").strip())
         return keycheck.list_providers(self._svc.provider_id, configured)
+
+    def provider_hub_state(self) -> dict[str, Any]:
+        """All saved connections, independently of the coach selection. Never keys."""
+        from dodoclaw.providers import get_provider
+        from dodoclaw.webui import customs, keycheck, keystore, provider_store
+
+        active = self._svc.provider_id
+        if active == "custom":
+            active = "custom:" + customs.active_custom_id()
+        data = provider_store.load()
+        rows = []
+        for pid in keycheck.PICKER_IDS:
+            spec = get_provider(pid)
+            values = provider_store.preset_values(pid, data)
+            rows.append({
+                "id": pid, "name": keycheck.provider_label(pid), "kind": "preset",
+                **values, "default_base_url": spec.base_url,
+                "default_model": spec.default_model, "models": spec.model_choices(),
+                "configured": keystore.has_key(spec.key_env) or (
+                    pid == active and bool((self._svc.coach.api_key or "").strip())
+                ),
+                "current": pid == active, "region": spec.region, "note": "；".join(filter(None, (
+                    spec.note,
+                    "地址和模型用于 AI 教练；云端语音使用官方接口" if pid in {
+                        "siliconflow", "stepfun", "stepfun_plan"
+                    } else "",
+                ))),
+                "apply_url": spec.apply_url(), "shares_key_with": keycheck.shares_key_with(pid),
+            })
+        for entry in customs.list_customs():
+            pid = "custom:" + entry.id
+            rows.append({
+                "id": pid, "name": entry.display_name, "kind": "custom",
+                "base_url": entry.base_url, "model": entry.model,
+                "default_base_url": "", "default_model": "", "models": [],
+                "configured": keystore.has_key(entry.key_env), "current": pid == active,
+                "region": "custom", "note": "OpenAI 兼容接口", "apply_url": "",
+                "shares_key_with": [],
+            })
+        return {"providers": rows, "active_provider": active}
+
+    def _hub_connection(self, provider_id: str) -> tuple[str, str, str, str]:
+        """Python-only (provider kind, key env, URL, model) lookup."""
+        from dodoclaw.providers import PROVIDERS, get_provider
+        from dodoclaw.webui import customs, provider_store
+
+        pid = str(provider_id or "")
+        if pid.startswith("custom:"):
+            entry = customs.get_custom(pid.split(":", 1)[1])
+            if not entry:
+                raise ValueError(customs.MSG_NOT_FOUND)
+            return "custom", entry.key_env, entry.base_url, entry.model
+        if pid not in PROVIDERS or pid == "custom":
+            raise ValueError("没有这个服务商")
+        spec = get_provider(pid)
+        values = provider_store.preset_values(pid)
+        return pid, spec.key_env, values["base_url"], values["model"]
+
+    def save_provider_config(
+        self, provider_id: str = "", name: str = "", base_url: str = "",
+        model: str = "", key: str = "", test: bool = False,
+    ) -> dict[str, Any]:
+        """Save any connection without selecting it; probing is explicitly optional."""
+        from dodoclaw.providers import PROVIDERS
+        from dodoclaw.webui import customs, keystore, provider_store
+        from dodoclaw.webui.provider_validate import normalize_base_url, validate_model_id
+
+        pid = str(provider_id or "")
+
+        def fail(reason: str, field: str = "", kind: str = "invalid") -> dict[str, Any]:
+            return {"ok": False, "saved": False, "configured": False, "msg": reason,
+                    "reason_zh": reason, "field": field, "kind": kind, "provider_id": pid}
+
+        # Validate everything before touching either file, including a supplied key.
+        # Blank means preserve the previous key, so offline saves remain useful.
+        if pid and not pid.startswith("custom:") and (pid not in PROVIDERS or pid == "custom"):
+            return fail("没有这个服务商")
+        if pid.startswith("custom:") and not customs.get_custom(pid.split(":", 1)[1]):
+            return fail(customs.MSG_NOT_FOUND)
+        try:
+            url = normalize_base_url(base_url if isinstance(base_url, str) else "")
+        except ValueError as exc:
+            return fail(str(exc), "url")
+        try:
+            mdl = validate_model_id(model if isinstance(model, str) else "")
+        except ValueError as exc:
+            return fail(str(exc), "model")
+        nm = str(name or "").strip()
+        if len(nm) > 40:
+            return fail(customs.MSG_NAME_LONG, "name")
+        cleaned = ""
+        if key is not None and not isinstance(key, str):
+            return fail(keystore.MSG_BAD_CHARS, "key")
+        if key and key.strip():
+            try:
+                cleaned = keystore.clean_key(key)
+            except keystore.KeyStoreError as exc:
+                return fail(exc.reason_zh, "key")
+        key = ""
+        try:
+            if not pid or pid.startswith("custom:"):
+                entry = customs.save_custom(
+                    name=nm, base_url=url, model=mdl,
+                    custom_id=pid.split(":", 1)[1] if pid else "", activate=False,
+                )
+                pid = "custom:" + entry.id
+                env_var = entry.key_env
+            else:
+                provider_store.save_preset(pid, url, mdl)
+                env_var = self._hub_connection(pid)[1]
+            if cleaned:
+                keystore.save_key(env_var, cleaned)
+        except keystore.KeyStoreError as exc:
+            reason = "接口配置已保存，但 Key 没能保存：" + exc.reason_zh
+            try:
+                configured = keystore.has_key(env_var)
+            except OSError:
+                configured = False
+            self._reload_coach()
+            return {
+                **fail(reason, "key", "store"), "saved": True,
+                "configured": configured, "provider_id": pid,
+            }
+        except ValueError as exc:
+            return fail(str(exc))
+        except Exception:
+            logger.warning("provider configuration save failed")
+            return fail("没能保存服务商配置，检查文件权限后重试", kind="store")
+        finally:
+            cleaned = ""
+
+        self.reload_env()  # also refreshes cloud voice credentials
+        self._follow_provider_stt()
+        res: dict[str, Any] = {
+            "ok": True, "saved": True, "configured": keystore.has_key(env_var),
+            "msg": "配置已保存", "reason_zh": "配置已保存", "field": "", "provider_id": pid,
+        }
+        if test:
+            # A failed probe does not undo a successful offline-capable save.
+            res["test"] = self.test_provider_config(pid)
+        return res
+
+    def test_provider_config(self, provider_id: str) -> dict[str, Any]:
+        """Probe one saved provider without changing or testing the active coach."""
+        from dodoclaw.providers import chat_extra_body
+        from dodoclaw.webui import keycheck, keystore
+
+        try:
+            kind, env_var, url, model = self._hub_connection(provider_id)
+        except ValueError as exc:
+            return {"ok": False, "kind": "invalid", "reason_zh": str(exc), "ms": None}
+        key = keystore.store().get(env_var)
+        if kind != "custom" and not key:
+            key = keystore.store().get("LLM_API_KEY")
+        return keycheck.test_key(
+            key, url, model, extra_body=chat_extra_body(kind, model), provider_id=kind,
+        )
+
+    def delete_provider_key(self, provider_id: str) -> dict[str, Any]:
+        """Remove the indicated provider's key, even when another coach is active."""
+        from dodoclaw.webui import keystore
+
+        try:
+            _kind, env_var, _url, _model = self._hub_connection(provider_id)
+            keystore.delete_key(env_var)
+        except ValueError as exc:
+            return {"ok": False, "msg": str(exc)}
+        self.reload_env()
+        msg = self._follow_provider_stt()
+        return {"ok": True, "msg": msg or "Key 已删除"}
 
     def _last_test_view(self) -> dict[str, Any]:
         """Last 测试 result + the fixed Chinese next step for a failure."""
@@ -871,12 +1005,10 @@ class Bridge:
         return {"id": pid, "name": keycheck.provider_label(pid)}
 
     def set_provider(self, provider_id: str) -> dict[str, Any]:
-        """Select a provider: write coach.provider + coach.model (that provider's
-        default model; base_url back to its default) and hot-reload the coach.
+        """Select a provider using its saved connection and hot-reload the coach.
         Returns {ok, msg, provider, model, key: {configured}}."""
         from dodoclaw import config
-        from dodoclaw.providers import get_provider
-        from dodoclaw.webui import keycheck
+        from dodoclaw.webui import keycheck, provider_store
 
         def out(ok: bool, msg: str = "") -> dict[str, Any]:
             return {
@@ -898,8 +1030,9 @@ class Bridge:
         if pid == prev:
             return out(True)
         try:
-            # Clear base_url override so the preset's fixed URL is used
-            config.save_coach_choice(pid, get_provider(pid).default_model, "")
+            provider_store.remember_active()
+            values = provider_store.preset_values(pid)
+            config.save_coach_choice(pid, values["model"], values["base_url"])
         except Exception:
             logger.exception("save coach provider failed")
             return out(False, "没能保存服务商选择，详情见日志")
@@ -1054,7 +1187,8 @@ class Bridge:
         c = self._svc.coach
         gen = getattr(self, "_coach_gen", 0)
         res = keycheck.test_key(
-            c.api_key or "", c.base_url, c.model, extra_body=chat_extra_body(self._svc.provider_id, c.model)
+            c.api_key or "", c.base_url, c.model, extra_body=chat_extra_body(self._svc.provider_id, c.model),
+            provider_id=self._svc.provider_id,
         )
         res = {**res, "model": c.model}
         if gen != getattr(self, "_coach_gen", 0):
@@ -1106,6 +1240,14 @@ class Bridge:
                 "msg": "",
             }
 
+        # A malformed key must not create/select a custom connection first.
+        if key and not isinstance(key, str):
+            return fail("invalid", keystore.MSG_BAD_CHARS, "key")
+        if isinstance(key, str) and key.strip():
+            try:
+                key = keystore.clean_key(key)
+            except keystore.KeyStoreError as exc:
+                return fail("invalid", exc.reason_zh, "key")
         try:
             entry = customs.save_custom(
                 name=name or "",
@@ -1197,6 +1339,8 @@ class Bridge:
             }
 
         try:
+            if not customs.get_custom(str(custom_id or "")):
+                return out(False, customs.MSG_NOT_FOUND)
             customs.select_custom(str(custom_id or ""))
         except ValueError as exc:
             return out(False, str(exc))
@@ -1214,6 +1358,7 @@ class Bridge:
         """Override the current preset's model (hand-editable combobox). Empty = default."""
         from dodoclaw import config
         from dodoclaw.providers import get_provider
+        from dodoclaw.webui import provider_store
         from dodoclaw.webui.provider_validate import validate_model_id
 
         pid = self._svc.provider_id
@@ -1227,7 +1372,9 @@ class Bridge:
         if not mdl or mdl == spec.default_model:
             mdl = ""  # remove override
         try:
-            config.save_coach_choice(pid, mdl, "")
+            url = self._svc.coach.base_url
+            provider_store.save_preset(pid, url, mdl or spec.default_model)
+            config.save_coach_choice(pid, mdl, url)
         except Exception:
             logger.exception("save coach model failed")
             return {"ok": False, "msg": "没能保存模型，详情见日志"}

@@ -9,8 +9,10 @@ from typing import Any
 from dodoclaw.audio_providers import get_stt_backend, get_tts_backend
 from dodoclaw.coach.agent import CoachAgent
 from dodoclaw.config import get_settings, reload_settings
+from dodoclaw.gsi.objectives import MatchEvents
 from dodoclaw.gsi.server import GSIServer
 from dodoclaw.gsi.state import GameSnapshot, GameStateStore
+from dodoclaw.names import find_heroes, hero_key, hero_zh
 from dodoclaw.providers import get_provider, resolve_llm_runtime
 from dodoclaw.reminders.engine import ReminderEngine, ReminderEvent
 from dodoclaw.voice.stt import create_stt
@@ -49,6 +51,8 @@ class DoDoClawService:
         self.settings = get_settings()
         self.yaml = self.settings.load_yaml()
         self.store = GameStateStore()
+        # Roshan / Aegis events seen this match — shared by reminders and the coach
+        self.objectives = MatchEvents()
         self._stop = threading.Event()
         self._started = False
         self._rem_thread: threading.Thread | None = None
@@ -95,6 +99,7 @@ class DoDoClawService:
             cooldown_sec=float(rem_cfg.get("cooldown_sec") or 25),
             announce_ult_ready=bool(rem_cfg.get("announce_ult_ready", False)),
             on_reminder=self._on_reminder,
+            events=self.objectives,
         )
 
         # BP / meta (OpenDota and/or STRATZ — user-owned tokens recommended)
@@ -299,6 +304,10 @@ class DoDoClawService:
 
     def _on_gsi(self, payload: dict[str, Any]) -> None:
         self._gsi_updates += 1
+        try:
+            self.objectives.ingest(payload)
+        except Exception:
+            logger.exception("objective events ingest failed")
         if self._recorder is not None:
             self._recorder.record(payload)
         snap = self.store.get()
@@ -457,9 +466,11 @@ class DoDoClawService:
 
     def status_text(self) -> str:
         snap = self.snapshot()
+        timers = "\n".join(self.objectives.context_lines(snap.clock_time)) if snap.in_game else ""
         return (
             f"{snap.summary_for_llm()}\n\n"
-            f"GSI 包计数: {self.store.update_count}\n"
+            + (f"{timers}\n\n" if timers else "")
+            + f"GSI 包计数: {self.store.update_count}\n"
             f"服务: {'运行中' if self.running else '未启动'}\n"
             f"LLM: {self.provider_name}\n"
             f"Model: {self.coach.model}\n"
@@ -528,13 +539,15 @@ class DoDoClawService:
                 logger.exception("draft speak failed")
         return text
 
-    def _knowledge_context(self, question: str, snap) -> str:
+    def _knowledge_context(
+        self, question: str, snap, mentioned: list[str] | None = None
+    ) -> str:
         if not self._knowledge:
             return ""
-        hero_keys: list[str] = []
-        if snap.hero_name:
+        # heroes named in the question first (that's what it is about), then mine
+        hero_keys: list[str] = list(mentioned or [])
+        if snap.hero_name and snap.hero_name not in hero_keys:
             hero_keys.append(snap.hero_name)
-        # also pull from abilities item names lightly via question only
         try:
             kb_cfg = self.yaml.get("knowledge") or {}
             return self._knowledge.context_for(
@@ -566,7 +579,12 @@ class DoDoClawService:
         logger.info("ask: %s", question[:120])
         # Only pull heavy BP meta when relevant (avoid hanging casual chat)
         draft_ctx = self._draft_context_for(snap, question)
-        knowledge_ctx = self._knowledge_context(question, snap)
+        mentioned = find_heroes(question)
+        knowledge_ctx = self._knowledge_context(question, snap, mentioned)
+        heroes_ctx = "、".join(f"{hero_zh(k)}({hero_key(k)})" for k in mentioned)
+        objectives_ctx = (
+            "\n".join(self.objectives.context_lines(snap.clock_time)) if snap.in_game else ""
+        )
         try:
             key = (self.coach.api_key or "").strip()
             if not key:
@@ -580,6 +598,8 @@ class DoDoClawService:
                     snap,
                     draft_context=draft_ctx,
                     knowledge_context=knowledge_ctx,
+                    objectives_context=objectives_ctx,
+                    heroes_context=heroes_ctx,
                 )
             else:
                 answer = self.coach.answer_offline_fallback(question, snap)
@@ -591,7 +611,10 @@ class DoDoClawService:
             logger.exception("coach failed")
             if raise_errors:
                 raise
-            answer = f"教练调用失败: {exc}"
+            from dodoclaw.coach.errors import classify
+
+            # same short Chinese reason as the web UI; never the raw exception text
+            answer = f"教练调用失败：{classify(exc)['reason_zh']}"
 
         logger.info("answer: %s", (answer or "")[:160])
         if speak and answer:

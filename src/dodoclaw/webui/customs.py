@@ -7,6 +7,7 @@ Key is stored as ``CUSTOM_<ID>_API_KEY`` in ``.env`` (never returned to JS).
 
 from __future__ import annotations
 
+import json
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -130,9 +131,7 @@ def _rewrite_custom_block(
     has no coach section yet. Comments on unrelated keys are kept via line rewrite
     for provider/model/base_url/custom_id; the list itself is dumped as YAML.
     """
-    import os
-
-    from dodoclaw.config import reload_settings
+    from dodoclaw.config import reload_settings, replace_settings_file
 
     path.parent.mkdir(parents=True, exist_ok=True)
     text = path.read_text(encoding="utf-8") if path.exists() else ""
@@ -171,7 +170,10 @@ def _rewrite_custom_block(
                     break
                 i += 1
             continue
-        if m and m.group(2) in {"custom_id", "provider", "model", "base_url"}:
+        if m and (
+            (m.group(2) == "custom_id" and custom_id is not None)
+            or (set_provider_custom and m.group(2) in {"provider", "model", "base_url"})
+        ):
             i += 1
             continue
         out.append(ln)
@@ -201,8 +203,8 @@ def _rewrite_custom_block(
         cp = next((e for e in entries if e.id == active), entries[0])
         head.append('  provider: "custom"')
         head.append(f'  custom_id: "{cp.id}"')
-        head.append(f'  model: "{cp.model}"')
-        head.append(f'  base_url: "{cp.base_url}"')
+        head.append(f'  model: {json.dumps(cp.model, ensure_ascii=False)}')
+        head.append(f'  base_url: {json.dumps(cp.base_url, ensure_ascii=False)}')
     elif custom_id is not None:
         if custom_id:
             head.append(f'  custom_id: "{custom_id}"')
@@ -212,7 +214,7 @@ def _rewrite_custom_block(
     lines[start + 1 : end] = new_block
     tmp = path.with_suffix(path.suffix + ".tmp")
     tmp.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    os.replace(tmp, path)
+    replace_settings_file(tmp, path)
     reload_settings()
 
 
@@ -244,6 +246,10 @@ def save_custom(
         cid = _new_id(set(by_id))
         entry = CustomProvider(id=cid, name=nm, base_url=url, model=mdl)
         entries.append(entry)
+    if activate:
+        from dodoclaw.webui import provider_store
+
+        provider_store.remember_active(path)
     _rewrite_custom_block(
         path,
         entries,
@@ -263,7 +269,9 @@ def delete_custom(custom_id: str, path: Path | None = None) -> CustomProvider | 
         return None
     left = [e for e in entries if e.id != cid]
     cur = active_custom_id(path)
-    activate = bool(left) and cur == cid
+    coach = _load_yaml(path).get("coach") or {}
+    was_active = isinstance(coach, dict) and coach.get("provider") == "custom" and cur == cid
+    activate = bool(left) and was_active
     new_active = left[0].id if activate else (cur if cur != cid else "")
     _rewrite_custom_block(
         path,
@@ -271,14 +279,17 @@ def delete_custom(custom_id: str, path: Path | None = None) -> CustomProvider | 
         custom_id=new_active if left else "",
         set_provider_custom=activate,
     )
-    if not left:
+    if not left and was_active:
         # clear coach overrides back toward defaults without inventing a provider
         from dodoclaw import config
 
         data = _load_yaml(path)
         coach = data.get("coach") if isinstance(data, dict) else None
         if isinstance(coach, dict) and str(coach.get("provider") or "") == "custom":
-            config.save_coach_choice("deepseek", "", "")
+            from dodoclaw.webui import provider_store
+
+            values = provider_store.preset_values("deepseek", data)
+            config.save_coach_choice("deepseek", values["model"], values["base_url"])
     return removed
 
 
@@ -287,6 +298,9 @@ def select_custom(custom_id: str, path: Path | None = None) -> CustomProvider:
     entry = get_custom(custom_id, path)
     if not entry:
         raise ValueError(MSG_NOT_FOUND)
+    from dodoclaw.webui import provider_store
+
+    provider_store.remember_active(path)
     entries = list_customs(path)
     _rewrite_custom_block(path, entries, custom_id=entry.id, set_provider_custom=True)
     return entry
